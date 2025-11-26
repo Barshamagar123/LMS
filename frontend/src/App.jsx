@@ -13,6 +13,10 @@ import AdminOTPLogin from './pages/AdminOTPLogin/AdminOTPLogin';
 import AdminVerifyOTP from './pages/AdminOTPLogin/VerifyOTP';
 import SendOTP from './pages/AdminOTPLogin/AdminOTPLogin';
 import VerifyOTP from './pages/AdminOTPLogin/VerifyOTP';
+import UserManagement from './pages/admin-dashboard/UserManagement';
+import CourseManagement from './pages/admin-dashboard/CourseManagement';
+import AnalyticsDashboard from './pages/admin-dashboard/AnalyticsDashboard';
+import SystemSettings from './pages/admin-dashboard/SystemSettings';
 
 const App = () => {
   return (
@@ -24,6 +28,10 @@ const App = () => {
           <Route path='/login' element={<LoginPage />} />
           <Route path='/send-otp' element={<SendOTP />} />
           <Route path='/verify-otp' element={<VerifyOTP />} />
+          <Route path='/user-management' element={<UserManagement />} />
+          <Route path='/course-management' element={<CourseManagement />} />
+          <Route path='/analytics-manangement' element={<AnalyticsDashboard />} />
+          <Route path='/setting' element={<SystemSettings />} />
           {/* Protected Instructor Dashboard */}
           <Route
             path='/instructor-dashboard'

@@ -12,10 +12,12 @@ const SendOTP = () => {
 
     try {
       setLoading(true);
+
       await API.post("/admin/login/send-otp", { email });
 
-      // Move to OTP verify page with email
+      // Navigate to verify page with the email included
       navigate("/verify-otp", { state: { email } });
+
     } catch (error) {
       alert(error.response?.data?.message || "Failed to send OTP");
     } finally {
@@ -26,11 +28,15 @@ const SendOTP = () => {
   return (
     <div className="flex items-center justify-center h-screen bg-gray-100 px-3">
       <div className="bg-white shadow-lg p-8 rounded-md w-full max-w-md">
+
         <h2 className="text-2xl font-bold mb-6 text-center text-blue-600">
           Admin Login — Send OTP
         </h2>
 
-        <label className="block mb-2 text-gray-700 font-medium">Admin Email</label>
+        <label className="block mb-2 text-gray-700 font-medium">
+          Admin Email
+        </label>
+
         <input
           type="email"
           placeholder="Enter admin email"
@@ -46,6 +52,7 @@ const SendOTP = () => {
         >
           {loading ? "Sending OTP..." : "Send OTP"}
         </button>
+
       </div>
     </div>
   );
