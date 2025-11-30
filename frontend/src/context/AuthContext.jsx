@@ -1,14 +1,13 @@
-import { createContext, useState, useEffect } from "react";
+// src/context/AuthContext.jsx
+import React, { createContext, useState, useContext } from "react";
 
-export const AuthContext = createContext();
+const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
+  const [user, setUser] = useState(() => {
     const storedUser = localStorage.getItem("user");
-    if (storedUser) setUser(JSON.parse(storedUser));
-  }, []);
+    return storedUser ? JSON.parse(storedUser) : null;
+  });
 
   const login = (userData) => {
     setUser(userData);
@@ -20,9 +19,18 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("user");
   };
 
+  // Check if user is authenticated
+  const isAuthenticated = () => !!user?.token; // returns true if token exists
+
+  // Check if user is admin
+  const isAdmin = () => user?.role === "ADMIN";
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, isAdmin, isAuthenticated }}>
       {children}
     </AuthContext.Provider>
   );
 };
+
+export const useAuth = () => useContext(AuthContext);
+export { AuthContext };

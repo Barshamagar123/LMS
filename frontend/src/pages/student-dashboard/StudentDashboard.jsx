@@ -1,12 +1,139 @@
-import { useState, useEffect } from 'react';
-import { 
-  Search, 
-  Filter, 
-  Clock, 
-  Users, 
-  Star, 
-  Play, 
-  BookOpen, 
+const sampleCourses = [
+  {
+    id: 1,
+    title: 'Complete Web Development Bootcamp',
+    instructor: 'Sarah Johnson',
+    category: 'Development',
+    price: 89.99,
+    originalPrice: 129.99,
+    rating: 4.8,
+    students: 12500,
+    duration: '42 hours',
+    image: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=400&h=250&fit=crop',
+    description: 'Learn web development from scratch with HTML, CSS, JavaScript, React, Node.js and more!',
+    level: 'Beginner',
+    lessons: 245,
+    isFeatured: true,
+    isFree: false
+  },
+  {
+    id: 2,
+    title: 'Data Science Fundamentals',
+    instructor: 'Mike Chen',
+    category: 'Data Science',
+    price: 0,
+    originalPrice: 99.99,
+    rating: 4.6,
+    students: 8900,
+    duration: '36 hours',
+    image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=250&fit=crop',
+    description: 'Master the fundamentals of data science with Python, pandas, and machine learning',
+    level: 'Intermediate',
+    lessons: 180,
+    isFeatured: false,
+    isFree: true
+  },
+  {
+    id: 3,
+    title: 'Mobile App Development with React Native',
+    instructor: 'Emily Davis',
+    category: 'Development',
+    price: 79.99,
+    originalPrice: 99.99,
+    rating: 4.9,
+    students: 6700,
+    duration: '48 hours',
+    image: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=400&h=250&fit=crop',
+    description: 'Build cross-platform mobile apps using React Native and JavaScript',
+    level: 'Intermediate',
+    lessons: 210,
+    isFeatured: true,
+    isFree: false
+  },
+  {
+    id: 4,
+    title: 'UI/UX Design Masterclass',
+    instructor: 'Alex Rodriguez',
+    category: 'Design',
+    price: 94.99,
+    originalPrice: 119.99,
+    rating: 4.7,
+    students: 10200,
+    duration: '30 hours',
+    image: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=400&h=250&fit=crop',
+    description: 'Learn professional UI/UX design principles and tools',
+    level: 'Beginner',
+    lessons: 150,
+    isFeatured: false,
+    isFree: false
+  },
+  {
+    id: 5,
+    title: 'Python for Beginners',
+    instructor: 'David Wilson',
+    category: 'Programming',
+    price: 0,
+    originalPrice: 49.99,
+    rating: 4.5,
+    students: 15600,
+    duration: '24 hours',
+    image: 'https://images.unsplash.com/photo-1526379879527-8559ecfcaec0?w=400&h=250&fit=crop',
+    description: 'Start your programming journey with Python',
+    level: 'Beginner',
+    lessons: 120,
+    isFeatured: true,
+    isFree: true
+  },
+  {
+    id: 6,
+    title: 'Advanced JavaScript Concepts',
+    instructor: 'Lisa Thompson',
+    category: 'Development',
+    price: 69.99,
+    originalPrice: 89.99,
+    rating: 4.8,
+    students: 7800,
+    duration: '28 hours',
+    image: 'https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a?w=400&h=250&fit=crop',
+    description: 'Deep dive into advanced JavaScript patterns and best practices',
+    level: 'Advanced',
+    lessons: 140,
+    isFeatured: false,
+    isFree: false
+  }
+];
+
+// Sample enrolled courses with progress
+const enrolledCourses = [
+  {
+    ...sampleCourses[0],
+    progress: 65,
+    lastLesson: 'React Hooks Deep Dive',
+    timeSpent: '15 hours'
+  },
+  {
+    ...sampleCourses[2],
+    progress: 30,
+    lastLesson: 'React Native Navigation',
+    timeSpent: '8 hours'
+  },
+  {
+    ...sampleCourses[4],
+    progress: 85,
+    lastLesson: 'Python Functions',
+    timeSpent: '12 hours'
+  }
+];
+
+import { useState, useMemo } from 'react';
+import {
+  Search,
+  Filter,
+  Clock,
+  Users,
+  Star,
+  Play,
+  BookOpen,
   Award,
   ChevronRight,
   Bookmark,
@@ -15,9 +142,6 @@ import {
 
 export default function StudentDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [courses, setCourses] = useState([]);
-  const [enrolledCourses, setEnrolledCourses] = useState([]);
-  const [filteredCourses, setFilteredCourses] = useState([]);
   const [filters, setFilters] = useState({
     category: 'all',
     price: 'all',
@@ -25,144 +149,9 @@ export default function StudentDashboard() {
     search: ''
   });
 
-  // Mock data - replace with actual API calls
-  useEffect(() => {
-    // Sample courses data
-    const sampleCourses = [
-      {
-        id: 1,
-        title: 'Complete Web Development Bootcamp',
-        instructor: 'Sarah Johnson',
-        category: 'Development',
-        price: 89.99,
-        originalPrice: 129.99,
-        rating: 4.8,
-        students: 12500,
-        duration: '42 hours',
-        image: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=400&h=250&fit=crop',
-        description: 'Learn web development from scratch with HTML, CSS, JavaScript, React, Node.js and more!',
-        level: 'Beginner',
-        lessons: 245,
-        isFeatured: true,
-        isFree: false
-      },
-      {
-        id: 2,
-        title: 'Data Science Fundamentals',
-        instructor: 'Mike Chen',
-        category: 'Data Science',
-        price: 0,
-        originalPrice: 99.99,
-        rating: 4.6,
-        students: 8900,
-        duration: '36 hours',
-        image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=250&fit=crop',
-        description: 'Master the fundamentals of data science with Python, pandas, and machine learning',
-        level: 'Intermediate',
-        lessons: 180,
-        isFeatured: false,
-        isFree: true
-      },
-      {
-        id: 3,
-        title: 'Mobile App Development with React Native',
-        instructor: 'Emily Davis',
-        category: 'Development',
-        price: 79.99,
-        originalPrice: 99.99,
-        rating: 4.9,
-        students: 6700,
-        duration: '48 hours',
-        image: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=400&h=250&fit=crop',
-        description: 'Build cross-platform mobile apps using React Native and JavaScript',
-        level: 'Intermediate',
-        lessons: 210,
-        isFeatured: true,
-        isFree: false
-      },
-      {
-        id: 4,
-        title: 'UI/UX Design Masterclass',
-        instructor: 'Alex Rodriguez',
-        category: 'Design',
-        price: 94.99,
-        originalPrice: 119.99,
-        rating: 4.7,
-        students: 10200,
-        duration: '30 hours',
-        image: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=400&h=250&fit=crop',
-        description: 'Learn professional UI/UX design principles and tools',
-        level: 'Beginner',
-        lessons: 150,
-        isFeatured: false,
-        isFree: false
-      },
-      {
-        id: 5,
-        title: 'Python for Beginners',
-        instructor: 'David Wilson',
-        category: 'Programming',
-        price: 0,
-        originalPrice: 49.99,
-        rating: 4.5,
-        students: 15600,
-        duration: '24 hours',
-        image: 'https://images.unsplash.com/photo-1526379879527-8559ecfcaec0?w=400&h=250&fit=crop',
-        description: 'Start your programming journey with Python',
-        level: 'Beginner',
-        lessons: 120,
-        isFeatured: true,
-        isFree: true
-      },
-      {
-        id: 6,
-        title: 'Advanced JavaScript Concepts',
-        instructor: 'Lisa Thompson',
-        category: 'Development',
-        price: 69.99,
-        originalPrice: 89.99,
-        rating: 4.8,
-        students: 7800,
-        duration: '28 hours',
-        image: 'https://images.unsplash.com/photo-1579468118864-1b9ea3c0db4a?w=400&h=250&fit=crop',
-        description: 'Deep dive into advanced JavaScript patterns and best practices',
-        level: 'Advanced',
-        lessons: 140,
-        isFeatured: false,
-        isFree: false
-      }
-    ];
-
-    // Sample enrolled courses with progress
-    const sampleEnrolledCourses = [
-      {
-        ...sampleCourses[0],
-        progress: 65,
-        lastLesson: 'React Hooks Deep Dive',
-        timeSpent: '15 hours'
-      },
-      {
-        ...sampleCourses[2],
-        progress: 30,
-        lastLesson: 'React Native Navigation',
-        timeSpent: '8 hours'
-      },
-      {
-        ...sampleCourses[4],
-        progress: 85,
-        lastLesson: 'Python Functions',
-        timeSpent: '12 hours'
-      }
-    ];
-
-    setCourses(sampleCourses);
-    setEnrolledCourses(sampleEnrolledCourses);
-    setFilteredCourses(sampleCourses);
-  }, []);
-
   // Filter courses based on selected filters
-  useEffect(() => {
-    let filtered = courses;
+  const filteredCourses = useMemo(() => {
+    let filtered = sampleCourses;
 
     // Search filter
     if (filters.search) {
@@ -193,8 +182,8 @@ export default function StudentDashboard() {
       filtered = filtered.filter(course => course.rating >= minRating);
     }
 
-    setFilteredCourses(filtered);
-  }, [filters, courses]);
+    return filtered;
+  }, [filters]);
 
   const categories = ['All', 'Development', 'Data Science', 'Design', 'Programming', 'Business', 'Marketing'];
   const priceOptions = [
@@ -217,7 +206,7 @@ export default function StudentDashboard() {
     { name: 'Early Bird', icon: '🌅', earned: false }
   ];
 
-  const recommendedCourses = courses.filter(course => course.isFeatured).slice(0, 3);
+  const recommendedCourses = sampleCourses.filter(course => course.isFeatured).slice(0, 3);
 
   return (
     <div className="min-h-screen bg-gray-50">

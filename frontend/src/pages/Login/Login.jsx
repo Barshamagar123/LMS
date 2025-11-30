@@ -1,5 +1,5 @@
-import { useState, useContext } from "react";
-import { AuthContext } from "../../context/AuthContext";
+import { useState } from "react";
+import { useAuth } from "../../context/AuthContext"; // ✅ fixed
 import API from "../../api/axios";
 import InputField from "../../components/InputField";
 import Button from "../../components/Button";
@@ -7,7 +7,7 @@ import { useNavigate, Link } from "react-router-dom";
 
 const Login = () => {
   const [form, setForm] = useState({ email: "", password: "" });
-  const { login } = useContext(AuthContext);
+  const { login } = useAuth(); // ✅ fixed
   const navigate = useNavigate();
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
@@ -16,7 +16,7 @@ const Login = () => {
     e.preventDefault();
     try {
       const res = await API.post("/auth/login", form);
-      login({ ...res.data.user, accessToken: res.data.accessToken });
+      login({ ...res.data.user, token: res.data.accessToken });
 
       // Role-based redirection
       if (res.data.user.role === "ADMIN") navigate("/admin-otp-login");
@@ -31,7 +31,6 @@ const Login = () => {
   };
 
   const handleGoogleSignIn = () => {
-    // Redirect to Google OAuth endpoint
     window.location.href = `${API.defaults.baseURL}/auth/google`;
   };
 
@@ -50,27 +49,9 @@ const Login = () => {
         </div>
 
         {/* Login Form */}
-        <form
-          className="bg-white rounded-2xl shadow-xl p-8 space-y-6 border border-gray-100"
-          onSubmit={handleSubmit}
-        >
-          <InputField
-            label="Email Address"
-            name="email"
-            type="email"
-            value={form.email}
-            onChange={handleChange}
-            placeholder="Enter your email"
-          />
-          
-          <InputField
-            label="Password"
-            type="password"
-            name="password"
-            value={form.password}
-            onChange={handleChange}
-            placeholder="Enter your password"
-          />
+        <form className="bg-white rounded-2xl shadow-xl p-8 space-y-6 border border-gray-100" onSubmit={handleSubmit}>
+          <InputField label="Email Address" name="email" type="email" value={form.email} onChange={handleChange} placeholder="Enter your email" />
+          <InputField label="Password" type="password" name="password" value={form.password} onChange={handleChange} placeholder="Enter your password" />
 
           <div className="flex items-center justify-between text-sm">
             <label className="flex items-center">
@@ -82,21 +63,16 @@ const Login = () => {
             </Link>
           </div>
 
-          <Button 
-            type="submit" 
-            className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
-          >
+          <Button type="submit" className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg">
             Sign In
           </Button>
 
-          {/* Divider */}
           <div className="relative flex items-center my-6">
             <div className="grow border-t border-gray-300"></div>
             <span className="shrink mx-4 text-gray-500 text-sm">Or continue with</span>
             <div className="grow border-t border-gray-300"></div>
           </div>
 
-          {/* Google Sign In Button */}
           <button
             type="button"
             onClick={handleGoogleSignIn}
@@ -121,7 +97,6 @@ const Login = () => {
           </div>
         </form>
 
-        {/* Footer */}
         <div className="text-center mt-6">
           <p className="text-xs text-gray-500">
             By continuing, you agree to our Terms of Service and Privacy Policy

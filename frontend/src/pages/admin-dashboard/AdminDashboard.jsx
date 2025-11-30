@@ -1,287 +1,504 @@
-// components/AdminDashboard.jsx
-import React, { useState, useEffect } from 'react';
-import { 
-  Users, 
-  BookOpen, 
-  DollarSign, 
-  TrendingUp, 
-  Settings,
-  Shield,
-  AlertCircle,
-  CheckCircle,
-  XCircle
-} from 'lucide-react';
-import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
-import UserManagement from './UserManagement';
-import CourseManagement from './CourseManagement';
-import AnalyticsDashboard from './AnalyticsDashboard';
-import SystemSettings from './SystemSettings';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import API from "../../api/axios";
 
-// Mock data - replace with actual API calls
-const mockData = {
-  stats: {
-    totalUsers: 12543,
-    totalCourses: 892,
-    totalRevenue: 1254300,
-    pendingApprovals: 23
-  },
-  recentActivities: [
-    { id: 1, type: 'course_approval', user: 'John Doe', course: 'React Masterclass', timestamp: '2024-01-15T10:30:00Z', status: 'pending' },
-    { id: 2, type: 'user_registration', user: 'Sarah Wilson', role: 'Instructor', timestamp: '2024-01-15T09:15:00Z', status: 'approved' },
-    { id: 3, type: 'course_creation', user: 'Mike Chen', course: 'Advanced Python', timestamp: '2024-01-14T16:45:00Z', status: 'pending' }
-  ],
-  pendingApprovals: [
-    { id: 1, type: 'instructor', name: 'Dr. Emily Johnson', email: 'emily@university.edu', submittedAt: '2024-01-14' },
-    { id: 2, type: 'course', title: 'Machine Learning Fundamentals', instructor: 'Prof. Robert Brown', submittedAt: '2024-01-13' }
-  ]
+// Import your components
+import AnalyticsDashboard from "./AnalyticsDashboard";
+import CourseManagement from "./CourseManagement";
+import SystemSettings from "./SystemSettings";
+import UserManagement from "./UserManagement";
+
+// Dashboard Card Component
+const StatCard = ({ title, value, icon, onClick }) => (
+  <div 
+    className={`bg-white shadow-md rounded-lg p-6 flex items-center space-x-4 ${onClick ? 'cursor-pointer hover:shadow-lg transition-shadow' : ''}`}
+    onClick={onClick}
+  >
+    <div className="text-4xl text-blue-500">{icon}</div>
+    <div>
+      <h4 className="text-gray-500">{title}</h4>
+      <p className="text-2xl font-bold">{value}</p>
+    </div>
+  </div>
+);
+
+// Navigation Sidebar Component
+const AdminSidebar = ({ activeTab, setActiveTab }) => {
+  const menuItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'analytics', label: 'Analytics', icon: '📈' },
+    { id: 'users', label: 'User Management', icon: '👥' },
+    { id: 'courses', label: 'Course Management', icon: '📚' },
+    { id: 'settings', label: 'System Settings', icon: '⚙️' },
+  ];
+
+  return (
+    <div className="bg-white shadow-lg h-full w-64 p-4">
+      <h2 className="text-xl font-bold mb-8 text-gray-800">Admin Panel</h2>
+      <nav>
+        {menuItems.map(item => (
+          <button
+            key={item.id}
+            onClick={() => setActiveTab(item.id)}
+            className={`w-full flex items-center space-x-3 p-3 rounded-lg mb-2 transition-colors ${
+              activeTab === item.id 
+                ? 'bg-blue-500 text-white' 
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <span className="text-xl">{item.icon}</span>
+            <span className="font-medium">{item.label}</span>
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
 };
 
-const AdminDashboard = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [stats, setStats] = useState(mockData.stats);
-  const [loading, setLoading] = useState(false);
-
-  // Determine active tab based on current route
-  const getActiveTab = () => {
-    const path = location.pathname;
-    if (path.includes('/user-management')) return 'users';
-    if (path.includes('/course-management')) return 'courses';
-    if (path.includes('/analytics-management')) return 'analytics';
-    if (path.includes('/setting')) return 'settings';
-    return 'overview';
+// Navbar Component
+const AdminNavbar = ({ activeTab, user, onLogout }) => {
+  const getPageTitle = (tab) => {
+    const titles = {
+      dashboard: 'Dashboard Overview',
+      analytics: 'Analytics Dashboard',
+      users: 'User Management',
+      courses: 'Course Management',
+      settings: 'System Settings'
+    };
+    return titles[tab] || 'Admin Panel';
   };
 
-  const handleNavigation = (tabId) => {
-    switch (tabId) {
-      case 'overview':
-        navigate('/admin');
-        break;
-      case 'users':
-        navigate('/user-management');
-        break;
-      case 'courses':
-        navigate('/course-management');
-        break;
-      case 'analytics':
-        navigate('/analytics-management');
-        break;
-      case 'settings':
-        navigate('/setting');
-        break;
-      default:
-        navigate('/admin');
-    }
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'pending':
-        return <AlertCircle className="w-4 h-4 text-yellow-500" />;
-      case 'approved':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'rejected':
-        return <XCircle className="w-4 h-4 text-red-500" />;
-      default:
-        return null;
-    }
-  };
-
-  const StatCard = ({ icon, title, value, subtitle, color = 'blue' }) => (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center">
-        <div className={`p-3 rounded-lg bg-${color}-50`}>
-          {React.cloneElement(icon, { className: `w-6 h-6 text-${color}-600` })}
+  return (
+    <div className="bg-white shadow-md border-b">
+      <div className="flex justify-between items-center px-6 py-4">
+        {/* Left side - Breadcrumb */}
+        <div className="flex items-center space-x-2">
+          <h1 className="text-xl font-bold text-gray-800">
+            {getPageTitle(activeTab)}
+          </h1>
+          <span className="text-gray-400">/</span>
+          <span className="text-sm text-gray-600 capitalize">
+            {activeTab === 'dashboard' ? 'Overview' : activeTab}
+          </span>
         </div>
-        <div className="ml-4">
-          <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
-          {subtitle && <p className="text-sm text-gray-500">{subtitle}</p>}
+
+        {/* Right side - User info & actions */}
+        <div className="flex items-center space-x-4">
+          {/* Notifications */}
+          <button className="relative p-2 text-gray-600 hover:text-blue-500 transition-colors">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M14.83 9.17l4.24-4.24M4.93 19.07l4.24-4.24" />
+            </svg>
+            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+          </button>
+
+          {/* Messages */}
+          <button className="relative p-2 text-gray-600 hover:text-blue-500 transition-colors">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+            <span className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full"></span>
+          </button>
+
+          {/* User profile dropdown */}
+          <div className="relative group">
+            <button className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-100 transition-colors">
+              <div className="w-10 h-10 bg-linear-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                <span className="text-white font-semibold text-sm">
+                  {user?.name?.charAt(0)?.toUpperCase() || 'A'}
+                </span>
+              </div>
+              <div className="text-left hidden md:block">
+                <p className="text-sm font-medium text-gray-800">{user?.name || 'Admin User'}</p>
+                <p className="text-xs text-gray-500">{user?.role || 'Administrator'}</p>
+              </div>
+              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* Dropdown menu */}
+            <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-xl border py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+              <div className="px-4 py-2 border-b">
+                <p className="text-sm font-medium text-gray-800">{user?.name || 'Admin User'}</p>
+                <p className="text-xs text-gray-500">{user?.email || 'admin@example.com'}</p>
+              </div>
+              <a href="/profile" className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors">
+                <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                My Profile
+              </a>
+              <a href="/settings" className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors">
+                <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Settings
+              </a>
+              <div className="border-t my-1"></div>
+              <button 
+                onClick={onLogout}
+                className="flex items-center w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 transition-colors"
+              >
+                <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Logout
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
+};
 
-  const DashboardOverview = () => (
-    <div className="space-y-6">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          icon={<Users />}
-          title="Total Users"
-          value={stats.totalUsers.toLocaleString()}
-          subtitle="+12% from last month"
-          color="blue"
+// Dashboard Content Component
+const DashboardContent = ({ 
+  stats, 
+  pendingInstructors, 
+  pendingCourses, 
+  onNavigate,
+  handleInstructorApproval,
+  handleCourseApproval 
+}) => {
+  return (
+    <div className="p-6 space-y-6">
+      {/* Dashboard Stats - Now clickable */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <StatCard 
+          title="Total Users" 
+          value={stats.totalUsers} 
+          icon="👥" 
+          onClick={() => onNavigate('users')}
         />
-        <StatCard
-          icon={<BookOpen />}
-          title="Total Courses"
-          value={stats.totalCourses.toLocaleString()}
-          subtitle="+8% from last month"
-          color="green"
+        <StatCard 
+          title="Total Courses" 
+          value={stats.totalCourses} 
+          icon="📚" 
+          onClick={() => onNavigate('courses')}
         />
-        <StatCard
-          icon={<DollarSign />}
-          title="Total Revenue"
-          value={formatCurrency(stats.totalRevenue)}
-          subtitle="+15% from last month"
-          color="purple"
-        />
-        <StatCard
-          icon={<TrendingUp />}
-          title="Pending Approvals"
-          value={stats.pendingApprovals}
-          subtitle="Requires attention"
-          color="orange"
+        <StatCard 
+          title="Total Revenue" 
+          value={`$${stats.totalRevenue}`} 
+          icon="💰" 
+          onClick={() => onNavigate('analytics')}
         />
       </div>
 
-      {/* Recent Activities & Pending Approvals */}
+      {/* Two Column Layout for Pending Approvals */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Activities */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">Recent Activities</h3>
+        {/* Pending Instructors Section */}
+        <div className="bg-white shadow-md rounded-lg p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-semibold">Pending Instructor Approvals</h3>
+            <span className="bg-yellow-500 text-white px-3 py-1 rounded-full text-sm font-medium">
+              {pendingInstructors.length} pending
+            </span>
           </div>
-          <div className="divide-y divide-gray-200">
-            {mockData.recentActivities.map((activity) => (
-              <div key={activity.id} className="px-6 py-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    {getStatusIcon(activity.status)}
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {activity.type === 'course_approval' && `Course approval requested for "${activity.course}"`}
-                        {activity.type === 'user_registration' && `New ${activity.role} registration: ${activity.user}`}
-                        {activity.type === 'course_creation' && `New course created: "${activity.course}"`}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        by {activity.user} • {formatDate(activity.timestamp)}
-                      </p>
-                    </div>
-                  </div>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    activity.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                    activity.status === 'approved' ? 'bg-green-100 text-green-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {activity.status}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Pending Approvals */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">Pending Approvals</h3>
-          </div>
-          <div className="divide-y divide-gray-200">
-            {mockData.pendingApprovals.map((approval) => (
-              <div key={approval.id} className="px-6 py-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {approval.type === 'instructor' ? `Instructor Application: ${approval.name}` : `Course: ${approval.title}`}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {approval.type === 'instructor' ? approval.email : `Instructor: ${approval.instructor}`}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Submitted: {formatDate(approval.submittedAt)}
-                    </p>
+          {pendingInstructors.length === 0 ? (
+            <p className="text-gray-500 text-center py-4">No pending instructor applications.</p>
+          ) : (
+            <div className="space-y-3">
+              {pendingInstructors.map(inst => (
+                <div key={inst.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-800">{inst.name}</p>
+                    <p className="text-sm text-gray-500">{inst.email}</p>
+                    <p className="text-xs text-gray-400 mt-1">Applied: {new Date(inst.createdAt).toLocaleDateString()}</p>
                   </div>
                   <div className="flex space-x-2">
-                    <button className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors">
+                    <button
+                      onClick={() => handleInstructorApproval(inst.id, true)}
+                      className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors"
+                    >
                       Approve
                     </button>
-                    <button className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors">
+                    <button
+                      onClick={() => handleInstructorApproval(inst.id, false)}
+                      className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors"
+                    >
                       Reject
                     </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Pending Courses Section */}
+        <div className="bg-white shadow-md rounded-lg p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-semibold">Pending Course Approvals</h3>
+            <span className="bg-yellow-500 text-white px-3 py-1 rounded-full text-sm font-medium">
+              {pendingCourses.length} pending
+            </span>
+          </div>
+          {pendingCourses.length === 0 ? (
+            <p className="text-gray-500 text-center py-4">No pending course submissions.</p>
+          ) : (
+            <div className="space-y-3">
+              {pendingCourses.map(course => (
+                <div key={course.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-800 truncate">{course.title}</p>
+                    <p className="text-sm text-gray-500">By: {course.instructor?.name || "Unknown"}</p>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        course.price === 0 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {course.price === 0 ? 'Free' : `$${course.price}`}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {new Date(course.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => handleCourseApproval(course.id, true)}
+                      className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleCourseApproval(course.id, false)}
+                      className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Recent Activity Section */}
+      <div className="bg-white shadow-md rounded-lg p-6">
+        <h3 className="text-xl font-semibold mb-4">Recent Activity</h3>
+        <div className="space-y-3">
+          <div className="flex items-center space-x-3 p-3 border rounded-lg">
+            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+            <div className="flex-1">
+              <p className="text-sm text-gray-800">New user registration</p>
+              <p className="text-xs text-gray-500">John Doe registered as a student</p>
+            </div>
+            <span className="text-xs text-gray-400">2 min ago</span>
+          </div>
+          <div className="flex items-center space-x-3 p-3 border rounded-lg">
+            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+            <div className="flex-1">
+              <p className="text-sm text-gray-800">Course approved</p>
+              <p className="text-xs text-gray-500">"React Fundamentals" was published</p>
+            </div>
+            <span className="text-xs text-gray-400">1 hour ago</span>
+          </div>
+          <div className="flex items-center space-x-3 p-3 border rounded-lg">
+            <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+            <div className="flex-1">
+              <p className="text-sm text-gray-800">Payment received</p>
+              <p className="text-xs text-gray-500">$49.99 for "Advanced JavaScript"</p>
+            </div>
+            <span className="text-xs text-gray-400">3 hours ago</span>
           </div>
         </div>
       </div>
     </div>
   );
+};
+
+// Main Admin Dashboard Component
+const AdminDashboard = () => {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalCourses: 0,
+    totalRevenue: 0,
+  });
+  const [pendingInstructors, setPendingInstructors] = useState([]);
+  const [pendingCourses, setPendingCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState({
+    name: "Admin User",
+    email: "admin@example.com",
+    role: "Administrator"
+  });
+  const navigate = useNavigate();
+
+  // Fetch user data
+  const fetchUserData = async () => {
+    try {
+      // Replace with your actual user endpoint
+      const userRes = await API.get("/admin/me");
+      setUser(userRes.data);
+    } catch (err) {
+      console.error("Error fetching user data:", err);
+      // Fallback to default user data
+      setUser({
+        name: "Admin User",
+        email: "admin@example.com",
+        role: "Administrator"
+      });
+    }
+  };
+
+  // Fetch dashboard stats
+  const fetchDashboard = async () => {
+    try {
+      const statsRes = await API.get("/admin/dashboard");
+      setStats(statsRes.data);
+    } catch (err) {
+      console.error("Error fetching dashboard stats:", err);
+    }
+  };
+
+  // Fetch pending instructors
+  const fetchPendingInstructors = async () => {
+    try {
+      const res = await API.get("/admin/instructors/pending");
+      setPendingInstructors(res.data);
+    } catch (err) {
+      console.error("Error fetching pending instructors:", err);
+    }
+  };
+
+  // Fetch pending courses
+  const fetchPendingCourses = async () => {
+    try {
+      const res = await API.get("/admin/courses/pending");
+      setPendingCourses(res.data);
+    } catch (err) {
+      console.error("Error fetching pending courses:", err);
+    }
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      setLoading(true);
+      await Promise.all([
+        fetchDashboard(), 
+        fetchPendingInstructors(), 
+        fetchPendingCourses(),
+        fetchUserData()
+      ]);
+      setLoading(false);
+    };
+    init();
+  }, []);
+
+  const handleLogout = () => {
+    // Add your logout logic here
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/send-otp');
+  };
+
+  const handleInstructorApproval = async (userId, approve = true) => {
+    try {
+      const endpoint = approve
+        ? `/admin/instructor/${userId}/approve`
+        : `/admin/instructor/${userId}/reject`;
+      await API.patch(endpoint);
+      setPendingInstructors(prev => prev.filter(u => u.id !== userId));
+      // Refresh stats after approval
+      fetchDashboard();
+    } catch (err) {
+      console.error("Error updating instructor status:", err);
+    }
+  };
+
+  const handleCourseApproval = async (courseId, approve = true) => {
+    try {
+      const endpoint = approve
+        ? `/admin/courses/${courseId}/approve`
+        : `/admin/courses/${courseId}/reject`;
+      await API.patch(endpoint);
+      setPendingCourses(prev => prev.filter(c => c.id !== courseId));
+      // Refresh stats after approval
+      fetchDashboard();
+    } catch (err) {
+      console.error("Error updating course status:", err);
+    }
+  };
+
+  // Handle navigation to different pages
+  const handleNavigate = (page) => {
+    navigate(`/admin/${page}`);
+    setActiveTab(page);
+  };
+
+  // Render different components based on active tab
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return (
+          <DashboardContent 
+            stats={stats}
+            pendingInstructors={pendingInstructors}
+            pendingCourses={pendingCourses}
+            onNavigate={handleNavigate}
+            handleInstructorApproval={handleInstructorApproval}
+            handleCourseApproval={handleCourseApproval}
+          />
+        );
+      case 'analytics':
+        return <AnalyticsDashboard />;
+      case 'users':
+        return <UserManagement />;
+      case 'courses':
+        return <CourseManagement />;
+      case 'settings':
+        return <SystemSettings />;
+      default:
+        return (
+          <DashboardContent 
+            stats={stats}
+            pendingInstructors={pendingInstructors}
+            pendingCourses={pendingCourses}
+            onNavigate={handleNavigate}
+            handleInstructorApproval={handleInstructorApproval}
+            handleCourseApproval={handleCourseApproval}
+          />
+        );
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-screen bg-gray-100 items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-500">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <Shield className="w-8 h-8 text-indigo-600" />
-              <h1 className="ml-2 text-xl font-semibold text-gray-900">Admin Dashboard</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
-                Refresh Data
-              </button>
-              <Settings className="w-5 h-5 text-gray-400 cursor-pointer hover:text-gray-600" />
-            </div>
-          </div>
+    <div className="flex h-screen bg-gray-100">
+      {/* Sidebar Navigation */}
+      <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Navbar */}
+        <AdminNavbar 
+          activeTab={activeTab} 
+          user={user} 
+          onLogout={handleLogout} 
+        />
+        
+        {/* Main Content */}
+        <div className="flex-1 overflow-auto">
+          {renderContent()}
         </div>
-      </header>
-
-      {/* Navigation */}
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
-            {[
-              { id: 'overview', label: 'Overview', path: '/admin' },
-              { id: 'users', label: 'User Management', path: '/admin/user-management' },
-              { id: 'courses', label: 'Course Management', path: '/admin/course-management' },
-              { id: 'analytics', label: 'Analytics', path: '/admin/analytics-management' },
-              { id: 'settings', label: 'Settings', path: '/admin/setting' }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => handleNavigation(tab.id)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  getActiveTab() === tab.id
-                    ? 'border-indigo-600 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </nav>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Routes>
-          <Route path="/" element={<DashboardOverview />} />
-          <Route path="/user-management" element={<UserManagement />} />
-          <Route path="/course-management" element={<CourseManagement />} />
-          <Route path="/analytics-management" element={<AnalyticsDashboard />} />
-          <Route path="/setting" element={<SystemSettings />} />
-        </Routes>
-      </main>
+      </div>
     </div>
   );
 };
