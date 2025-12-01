@@ -16,8 +16,10 @@ import CourseManagement from './pages/admin-dashboard/CourseManagement';
 import AnalyticsDashboard from './pages/admin-dashboard/AnalyticsDashboard';
 import SystemSettings from './pages/admin-dashboard/SystemSettings';
 import UserManagement from './pages/admin-dashboard/UserManagement';
-import CourseGrid from './components/CourseGrid';
 import CourseForm from './components/CourseForm';
+import CourseEdit from './components/CourseEdit';
+import CoursesPage from './pages/Courses/Courses';
+import CourseDetail from './pages/Courses/CourseDetails';
 
 const App = () => {
   return (
@@ -30,14 +32,22 @@ const App = () => {
           <Route path='/login' element={<LoginPage />} />
           <Route path='/send-otp' element={<SendOTP />} />
           <Route path='/verify-otp' element={<VerifyOTP />} />
-          <Route path='/card' element={<CourseGrid />} />
-          
+          <Route path='/courses' element={<CoursesPage />} />
+          <Route path='/courses/:id' element={<CourseDetail />} />
           {/* Protected Create Course Route for Instructors */}
           <Route
             path='/create-course'
             element={
               <ProtectedRoute role="INSTRUCTOR">
                 <CourseForm />
+              </ProtectedRoute>
+            }
+          />
+            <Route
+            path='/instructor/courses/:id/edit'
+            element={
+              <ProtectedRoute role="INSTRUCTOR">
+                <CourseEdit />
               </ProtectedRoute>
             }
           />

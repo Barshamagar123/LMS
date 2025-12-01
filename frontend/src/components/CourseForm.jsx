@@ -303,11 +303,11 @@ const CourseForm = ({ onCourseCreated }) => {
   // If not authenticated, show login prompt
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8">
+      <div className="min-h-screen bg-linear-to-br from-gray-50 to-blue-50 py-8">
         <div className="max-w-4xl mx-auto px-4">
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-3 bg-white rounded-2xl px-6 py-3 shadow-sm border border-gray-200 mb-4">
-              <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
+              <div className="p-2 bg-linear-to-r from-blue-500 to-purple-600 rounded-lg">
                 <BookOpen className="w-6 h-6 text-white" />
               </div>
               <div className="text-left">
@@ -318,7 +318,7 @@ const CourseForm = ({ onCourseCreated }) => {
           </div>
 
           <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-6">
+            <div className="bg-linear-to-r from-blue-600 to-purple-600 px-8 py-6">
               <h2 className="text-2xl font-bold text-white">Login Required</h2>
               <p className="text-blue-100 mt-1">You need to be logged in to create courses</p>
             </div>
@@ -334,7 +334,7 @@ const CourseForm = ({ onCourseCreated }) => {
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <button
                   onClick={handleLogin}
-                  className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all font-semibold shadow-lg"
+                  className="px-8 py-3 bg-linear-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all font-semibold shadow-lg"
                 >
                   Go to Login
                 </button>
@@ -362,12 +362,12 @@ const CourseForm = ({ onCourseCreated }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8">
+    <div className="min-h-screen bg-linear-to-br from-gray-50 to-blue-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3 bg-white rounded-2xl px-6 py-3 shadow-sm border border-gray-200 mb-4">
-            <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
+            <div className="p-2 bg-linear-to-r from-blue-500 to-purple-600 rounded-lg">
               <BookOpen className="w-6 h-6 text-white" />
             </div>
             <div className="text-left">
@@ -403,7 +403,7 @@ const CourseForm = ({ onCourseCreated }) => {
 
         <form className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden" onSubmit={handleSubmit}>
           {/* Form Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-6">
+          <div className="bg-linear-to-r from-blue-600 to-purple-600 px-8 py-6">
             <h2 className="text-2xl font-bold text-white">Course Information</h2>
             <p className="text-blue-100 mt-1">Fill in the basic details about your course</p>
           </div>
@@ -561,7 +561,7 @@ const CourseForm = ({ onCourseCreated }) => {
                 <button
                   type="button"
                   onClick={handleAddModule}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 transition-all shadow-sm"
+                  className="flex items-center gap-2 px-4 py-2 bg-linear-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 transition-all shadow-sm"
                 >
                   <Plus className="w-4 h-4" />
                   Add Module
@@ -579,7 +579,7 @@ const CourseForm = ({ onCourseCreated }) => {
                   {modules.map((module, mIndex) => (
                     <div key={module.id} className="border border-gray-200 rounded-2xl overflow-hidden">
                       {/* Module Header */}
-                      <div className="bg-gradient-to-r from-gray-50 to-blue-50 px-6 py-4 border-b border-gray-200">
+                      <div className="bg-linear-to-r from-gray-50 to-blue-50 px-6 py-4 border-b border-gray-200">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -714,7 +714,7 @@ const CourseForm = ({ onCourseCreated }) => {
               <button
                 type="submit"
                 disabled={loading || loadingCategories}
-                className="flex-1 px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all font-semibold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex-1 px-6 py-4 bg-linear-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all font-semibold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
