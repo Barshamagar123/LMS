@@ -20,6 +20,7 @@ import CourseForm from './components/CourseForm';
 import CourseEdit from './components/CourseEdit';
 import CoursesPage from './pages/Courses/Courses';
 import CourseDetail from './pages/Courses/CourseDetails';
+import CategoryManagement from './pages/admin-dashboard/CategoryManagement';
 
 const App = () => {
   return (
@@ -61,7 +62,13 @@ const App = () => {
               </div>
             </div>
           } />
-          
+          <Route
+          path='/admin/categories'
+          element={
+          <ProtectedRoute role="ADMIN">
+            <CategoryManagement />
+          </ProtectedRoute>
+          } />
           {/* Protected Admin Routes */}
           <Route
             path='/admin-dashboard'

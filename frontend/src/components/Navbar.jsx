@@ -20,7 +20,7 @@ export default function Navbar() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
-            <a href="#courses" className="text-gray-700 hover:text-indigo-600 transition-colors">
+            <a href="/courses" className="text-gray-700 hover:text-indigo-600 transition-colors">
               Courses
             </a>
             <a href="#categories" className="text-gray-700 hover:text-indigo-600 transition-colors">

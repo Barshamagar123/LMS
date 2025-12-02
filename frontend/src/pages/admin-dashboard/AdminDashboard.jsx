@@ -7,6 +7,7 @@ import AnalyticsDashboard from "./AnalyticsDashboard";
 import CourseManagement from "./CourseManagement";
 import SystemSettings from "./SystemSettings";
 import UserManagement from "./UserManagement";
+import CategoryManagement from "./CategoryManagement";
 
 // Dashboard Card Component
 const StatCard = ({ title, value, icon, onClick }) => (
@@ -29,6 +30,7 @@ const AdminSidebar = ({ activeTab, setActiveTab }) => {
     { id: 'analytics', label: 'Analytics', icon: '📈' },
     { id: 'users', label: 'User Management', icon: '👥' },
     { id: 'courses', label: 'Course Management', icon: '📚' },
+    { id: 'categories', label: 'Category Management', icon: '🏷️' },
     { id: 'settings', label: 'System Settings', icon: '⚙️' },
   ];
 
@@ -63,7 +65,8 @@ const AdminNavbar = ({ activeTab, user, onLogout }) => {
       analytics: 'Analytics Dashboard',
       users: 'User Management',
       courses: 'Course Management',
-      settings: 'System Settings'
+      categories: 'Category Management',
+      settings: 'System Settings',
     };
     return titles[tab] || 'Admin Panel';
   };
@@ -453,6 +456,8 @@ const AdminDashboard = () => {
         return <UserManagement />;
       case 'courses':
         return <CourseManagement />;
+      case 'categories':
+        return <CategoryManagement />;
       case 'settings':
         return <SystemSettings />;
       default:
