@@ -305,7 +305,7 @@ const CategoryManagement = () => {
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header with gradient */}
-              <div className="px-6 py-4 border-b bg-gradient-to-r from-blue-50 to-white">
+              <div className="px-6 py-4 border-b bg-linear-to-r from-blue-50 to-white">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <div className="p-2 bg-blue-100 rounded-lg">
@@ -385,7 +385,7 @@ const CategoryManagement = () => {
                     <button
                       type="submit"
                       disabled={formLoading}
-                      className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                      className="px-5 py-2.5 bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                     >
                       {formLoading ? (
                         <>

@@ -332,7 +332,7 @@ export default function InstructorDashboard() {
                 {/* Dropdown Menu */}
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
                   <Link
-                    to="/profile"
+                    to="/instructor/profile"
                     className="flex items-center gap-2 px-4 py-3 text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     <UserCircle className="w-4 h-4" />
@@ -427,7 +427,7 @@ export default function InstructorDashboard() {
         {/* Success Message */}
         {success && (
           <div className="mb-6 bg-green-50 border border-green-200 rounded-xl p-4 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+            <AlertCircle className="w-5 h-5 text-green-600 mt-0.5 shrink-0" />
             <div>
               <p className="text-green-700 font-medium">{success}</p>
             </div>

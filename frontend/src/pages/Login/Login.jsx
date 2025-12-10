@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "../../context/AuthContext"; // ✅ fixed
+import { useAuth } from "../../context/AuthContext";
 import API from "../../api/axios";
 import InputField from "../../components/InputField";
 import Button from "../../components/Button";
@@ -7,26 +7,56 @@ import { useNavigate, Link } from "react-router-dom";
 
 const Login = () => {
   const [form, setForm] = useState({ email: "", password: "" });
-  const { login } = useAuth(); // ✅ fixed
+  const { login } = useAuth();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError("");
+
     try {
       const res = await API.post("/auth/login", form);
-      login({ ...res.data.user, token: res.data.accessToken });
+      console.log("Login response:", res.data);
+      
+      // Store user data and token
+      login({ 
+        ...res.data.user, 
+        token: res.data.accessToken 
+      }, res.data.accessToken);
 
-      // Role-based redirection
-      if (res.data.user.role === "ADMIN") navigate("/admin-otp-login");
+      // Role-based redirection WITH PROFILE COMPLETION CHECK
+      if (res.data.user.role === "ADMIN") {
+        navigate("/admin-otp-login");
+      } 
       else if (res.data.user.role === "INSTRUCTOR") {
-        res.data.user.isApproved
-          ? navigate("/instructor-dashboard")
-          : navigate("/pending-approval");
-      } else navigate("/student-dashboard");
+        // Check if instructor is approved
+        if (!res.data.user.isApproved) {
+          navigate("/pending-approval");
+        } 
+        // CRITICAL: Check if profile needs to be completed
+        else if (!res.data.user.profileCompleted) {
+          console.log("Instructor needs to complete profile, redirecting...");
+          navigate("/instructor/complete-profile");
+        } 
+        // If approved and profile completed, go to dashboard
+        else {
+          navigate("/instructor-dashboard");
+        }
+      } 
+      else {
+        navigate("/student-dashboard");
+      }
+      
     } catch (err) {
+      setError(err.response?.data?.message || err.message);
       alert(err.response?.data?.message || err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -48,10 +78,33 @@ const Login = () => {
           <p className="text-gray-600">Sign in to your account to continue</p>
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            {error}
+          </div>
+        )}
+
         {/* Login Form */}
         <form className="bg-white rounded-2xl shadow-xl p-8 space-y-6 border border-gray-100" onSubmit={handleSubmit}>
-          <InputField label="Email Address" name="email" type="email" value={form.email} onChange={handleChange} placeholder="Enter your email" />
-          <InputField label="Password" type="password" name="password" value={form.password} onChange={handleChange} placeholder="Enter your password" />
+          <InputField 
+            label="Email Address" 
+            name="email" 
+            type="email" 
+            value={form.email} 
+            onChange={handleChange} 
+            placeholder="Enter your email" 
+            required
+          />
+          <InputField 
+            label="Password" 
+            type="password" 
+            name="password" 
+            value={form.password} 
+            onChange={handleChange} 
+            placeholder="Enter your password" 
+            required
+          />
 
           <div className="flex items-center justify-between text-sm">
             <label className="flex items-center">
@@ -63,8 +116,12 @@ const Login = () => {
             </Link>
           </div>
 
-          <Button type="submit" className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg">
-            Sign In
+          <Button 
+            type="submit" 
+            disabled={loading}
+            className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? "Signing in..." : "Sign In"}
           </Button>
 
           <div className="relative flex items-center my-6">
@@ -76,7 +133,8 @@ const Login = () => {
           <button
             type="button"
             onClick={handleGoogleSignIn}
-            className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-gray-300 rounded-lg bg-white text-gray-700 font-medium hover:bg-gray-50 transition-colors duration-200 shadow-sm hover:shadow-md"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-gray-300 rounded-lg bg-white text-gray-700 font-medium hover:bg-gray-50 transition-colors duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>

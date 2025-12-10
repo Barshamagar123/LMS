@@ -18,9 +18,15 @@ import SystemSettings from './pages/admin-dashboard/SystemSettings';
 import UserManagement from './pages/admin-dashboard/UserManagement';
 import CourseForm from './components/CourseForm';
 import CourseEdit from './components/CourseEdit';
-import CoursesPage from './pages/Courses/Courses';
+
 import CourseDetail from './pages/Courses/CourseDetails';
 import CategoryManagement from './pages/admin-dashboard/CategoryManagement';
+import CoursePlayerModal from './pages/Courses/Courses';
+import ErrorBoundary from './components/ErrorBoundary';
+import CheckoutPage from './pages/Courses/CheckoutPage';
+import CompleteProfile from './pages/instructor-dashboard/CompleteProfile';
+import EditInstructorProfile from './pages/instructor-dashboard/EditInstructorProfile';
+import InstructorProfile from './pages/instructor-dashboard/InstructorProfile';
 
 const App = () => {
   return (
@@ -33,7 +39,7 @@ const App = () => {
           <Route path='/login' element={<LoginPage />} />
           <Route path='/send-otp' element={<SendOTP />} />
           <Route path='/verify-otp' element={<VerifyOTP />} />
-          <Route path='/courses' element={<CoursesPage />} />
+          <Route path='/courses' element={<ErrorBoundary><CoursePlayerModal /></ErrorBoundary>} />
           <Route path='/courses/:id' element={<CourseDetail />} />
           {/* Protected Create Course Route for Instructors */}
           <Route
@@ -44,6 +50,28 @@ const App = () => {
               </ProtectedRoute>
             }
           />
+          <Route path="/instructor/complete-profile" element={
+  <ProtectedRoute role="INSTRUCTOR" requireProfileCompletion={false}>
+    <CompleteProfile />
+  </ProtectedRoute>
+} />
+<Route 
+  path="/instructor/profile" 
+  element={
+    <ProtectedRoute role="INSTRUCTOR">
+      <InstructorProfile />
+    </ProtectedRoute>
+  } 
+/>
+
+<Route 
+  path="/instructor/edit-profile" 
+  element={
+    <ProtectedRoute role="INSTRUCTOR">
+      <EditInstructorProfile />
+    </ProtectedRoute>
+  } 
+/>
             <Route
             path='/instructor/courses/:id/edit'
             element={
@@ -52,6 +80,10 @@ const App = () => {
               </ProtectedRoute>
             }
           />
+          <Route 
+            path="/checkout/:courseId" 
+            element={<CheckoutPage />} 
+        />
           
           <Route path='/unauthorized' element={
             <div className="min-h-screen flex items-center justify-center bg-gray-100">
