@@ -27,6 +27,8 @@ import CheckoutPage from './pages/Courses/CheckoutPage';
 import CompleteProfile from './pages/instructor-dashboard/CompleteProfile';
 import EditInstructorProfile from './pages/instructor-dashboard/EditInstructorProfile';
 import InstructorProfile from './pages/instructor-dashboard/InstructorProfile';
+import PaymentPage from './pages/Courses/PaymentPage';
+import PaymentSuccessPage from './pages/Courses/PaymentSuccessPage';
 
 const App = () => {
   return (
@@ -84,6 +86,9 @@ const App = () => {
             path="/checkout/:courseId" 
             element={<CheckoutPage />} 
         />
+                      <Route path="/checkout/:courseId/success" element={<PaymentSuccessPage />} />
+
+        <Route path="/checkout/:courseId/payment" element={<PaymentPage />} />
           
           <Route path='/unauthorized' element={
             <div className="min-h-screen flex items-center justify-center bg-gray-100">

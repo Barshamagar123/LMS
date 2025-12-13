@@ -7,7 +7,9 @@ import {
   BookOpen,
   Award,
   Eye,
-  Lock
+  Lock,
+  Image,
+  AlertCircle
 } from 'lucide-react';
 import API from '../../api/axios';
 
@@ -17,6 +19,7 @@ const CoursesPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [enrollingCourseId, setEnrollingCourseId] = useState(null);
+  const [failedImages, setFailedImages] = useState(new Set());
 
   // --- Helpers ---
   const formatDuration = (minutes) => {
@@ -62,44 +65,60 @@ const CoursesPage = () => {
     );
   };
 
-  // SIMPLIFIED: Get thumbnail URL - FIXED VERSION
+  // FIXED: Get thumbnail URL
   const getThumbnailUrl = (course) => {
-    // First, log what we're working with
-    console.log('🔍 Checking course thumbnail for:', course.title, course);
+    // Check if course has thumbnail
+    if (!course) return null;
     
-    // Check common field names
-    const thumbnailFields = [
-      'thumbnail',
-      'thumbnailUrl', 
-      'thumbnail_url',
-      'thumbnail_path',
-      'image',
-      'imageUrl',
-      'image_url',
-      'coverImage',
-      'cover_image',
-      'banner',
-      'bannerUrl'
+    // Your API returns thumbnail in 'thumbnail' field
+    if (course.thumbnail && typeof course.thumbnail === 'string' && course.thumbnail.trim() !== '') {
+      let url = course.thumbnail;
+      
+      // If it's a relative path, prepend your server URL
+      if (url.startsWith('/')) {
+        // In development
+        if (window.location.hostname === 'localhost') {
+          url = `http://localhost:3000${url}`;
+        } else {
+          // In production, use the current origin
+          url = `${window.location.origin}${url}`;
+        }
+      }
+      
+      console.log(`✅ Thumbnail URL for "${course.title}":`, url);
+      return url;
+    }
+    
+    // Check other possible field names as fallback
+    const possibleFields = [
+      'thumbnailUrl', 'thumbnail_url', 'image', 'imageUrl', 
+      'image_url', 'coverImage', 'cover_image', 'banner'
     ];
     
-    for (const field of thumbnailFields) {
+    for (const field of possibleFields) {
       if (course[field] && typeof course[field] === 'string' && course[field].trim() !== '') {
         let url = course[field];
-        console.log(`✅ Found thumbnail in field "${field}":`, url);
         
-        // Convert relative paths to absolute URLs
-        if (url.startsWith('/uploads/')) {
-          url = `http://localhost:3000${url}`;
-        } else if (url.startsWith('uploads/')) {
-          url = `http://localhost:3000/${url}`;
+        if (url.startsWith('/')) {
+          if (window.location.hostname === 'localhost') {
+            url = `http://localhost:3000${url}`;
+          } else {
+            url = `${window.location.origin}${url}`;
+          }
         }
         
+        console.log(`✅ Found thumbnail in "${field}" for "${course.title}":`, url);
         return url;
       }
     }
     
-    console.log('❌ No thumbnail found in course:', course.title);
+    console.log(`❌ No thumbnail found for "${course.title}"`);
     return null;
+  };
+
+  // Check if image failed to load
+  const hasImageFailed = (courseId) => {
+    return failedImages.has(courseId);
   };
 
   // --- Fetch Courses ---
@@ -107,19 +126,14 @@ const CoursesPage = () => {
     try {
       setLoading(true);
       setError('');
+      setFailedImages(new Set()); // Reset failed images
       
       console.log('🚀 Fetching courses from API...');
       const response = await API.get('/courses'); 
       
-      console.log('📊 RAW API RESPONSE:', response);
-      console.log('📊 Response data structure:', {
-        hasData: !!response.data,
-        dataKeys: Object.keys(response.data || {}),
-        isArray: Array.isArray(response.data),
-        dataType: typeof response.data
-      });
+      console.log('📊 API Response:', response);
       
-      // Handle different response structures
+      // Handle response structure
       let coursesData = [];
       
       if (Array.isArray(response.data)) {
@@ -134,26 +148,18 @@ const CoursesPage = () => {
       
       console.log(`📈 Found ${coursesData.length} courses`);
       
+      // Log thumbnail information for debugging
       if (coursesData.length > 0) {
-        // Log thumbnail info for ALL courses
         coursesData.forEach((course, index) => {
+          const thumbnailUrl = getThumbnailUrl(course);
           console.log(`🎯 Course ${index + 1}: "${course.title}"`, {
             id: course.id,
-            // Check ALL fields for thumbnails
+            hasThumbnailField: !!course.thumbnail,
             thumbnail: course.thumbnail,
-            thumbnailUrl: course.thumbnailUrl,
-            thumbnail_path: course.thumbnail_path,
-            thumbnail_url: course.thumbnail_url,
-            image: course.image,
-            imageUrl: course.imageUrl,
-            image_url: course.image_url,
-            coverImage: course.coverImage,
-            cover_image: course.cover_image,
-            // Check if thumbnail is nested
-            media: course.media,
-            images: course.images,
-            // All fields for debugging
-            allFields: Object.keys(course)
+            thumbnailUrl: thumbnailUrl,
+            allFields: Object.keys(course).filter(k => 
+              k.includes('thumb') || k.includes('image') || k.includes('cover')
+            )
           });
         });
       }
@@ -178,6 +184,12 @@ const CoursesPage = () => {
     console.log('🔄 CoursesPage mounted, fetching courses...');
     fetchCourses(); 
   }, []);
+
+  // Handle image load error
+  const handleImageError = (courseId) => {
+    console.error(`❌ Image failed to load for course ${courseId}`);
+    setFailedImages(prev => new Set([...prev, courseId]));
+  };
 
   // --- Enrollment Handler ---
   const handleEnroll = async (courseId, e) => {
@@ -252,9 +264,12 @@ const CoursesPage = () => {
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg border border-red-200">
-            <div className="font-semibold">Error:</div>
-            <div>{error}</div>
+          <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg border border-red-200 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold">Error:</div>
+              <div>{error}</div>
+            </div>
           </div>
         )}
 
@@ -279,16 +294,18 @@ const CoursesPage = () => {
             const totalLessons = getTotalLessons(course);
             const totalDuration = getTotalCourseDuration(course);
             const thumbnailUrl = getThumbnailUrl(course);
+            const imageFailed = hasImageFailed(id);
 
             console.log(`🖼️ Rendering course ${id}:`, {
               title: course.title,
               thumbnailUrl,
-              hasThumbnail: !!thumbnailUrl
+              imageFailed,
+              hasThumbnail: !!thumbnailUrl && !imageFailed
             });
 
             return (
               <div key={id} className="group relative">
-                <div className="bg-white rounded-2xl shadow-xl overflow-hidden hover:shadow-2xl transition-all duration-300">
+                <div className="bg-white rounded-2xl shadow-xl overflow-hidden hover:shadow-2xl transition-all duration-300 h-full flex flex-col">
                   
                   {/* Difficulty Ribbon */}
                   <div className="absolute top-4 left-4 z-10">
@@ -304,103 +321,104 @@ const CoursesPage = () => {
                     </div>
                   </div>
 
-                  {/* Course Image - UPDATED TO SHOW ACTUAL THUMBNAIL */}
+                  {/* Course Image */}
                   <div 
-                    className="h-56 relative overflow-hidden bg-gradient-to-br from-blue-100 to-purple-100 cursor-pointer group"
+                    className="h-56 relative overflow-hidden bg-gradient-to-br from-blue-100 to-purple-100 cursor-pointer group flex-shrink-0"
                     onClick={() => goToCourseDetails(id)}
                   >
-                    {thumbnailUrl ? (
+                    {thumbnailUrl && !imageFailed ? (
                       <>
                         <img
                           src={thumbnailUrl}
                           alt={course.title}
                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                          onError={(e) => {
-                            console.error('❌ Image load failed:', thumbnailUrl);
-                            e.target.style.display = 'none';
-                            // Create fallback element
-                            const parent = e.target.parentElement;
-                            if (parent) {
-                              const fallback = document.createElement('div');
-                              fallback.className = 'w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-blue-100 to-purple-100';
-                              fallback.innerHTML = `
-                                <div class="w-16 h-16 text-gray-400 mb-3">📚</div>
-                                <p class="text-gray-500">${course.title}</p>
-                                <p class="text-xs text-gray-400 mt-2">Thumbnail failed to load</p>
-                              `;
-                              parent.appendChild(fallback);
-                            }
-                          }}
-                          onLoad={(e) => {
-                            console.log('✅ Image loaded successfully:', thumbnailUrl);
-                          }}
+                          onError={() => handleImageError(id)}
+                          onLoad={() => console.log(`✅ Image loaded: ${thumbnailUrl}`)}
+                          loading="lazy"
                         />
-                        {/* Debug info - only show in development */}
+                        
+                        {/* Debug overlay (only in development) */}
                         {process.env.NODE_ENV === 'development' && (
-                          <div className="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                            Thumbnail: {course.thumbnail ? 'Yes' : 'No'}
+                          <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                            {course.thumbnail ? 'Has thumbnail' : 'No thumbnail'}
                           </div>
                         )}
+                        
+                        {/* Hover overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                       </>
                     ) : (
+                      // Fallback when no thumbnail or image failed
                       <div className="w-full h-full flex flex-col items-center justify-center p-4">
-                        <div className="w-16 h-16 bg-blue-200 rounded-full flex items-center justify-center mb-3">
-                          <BookOpen className="w-8 h-8 text-blue-600" />
+                        <div className="w-16 h-16 bg-gradient-to-br from-blue-200 to-purple-200 rounded-full flex items-center justify-center mb-3">
+                          {imageFailed ? (
+                            <Image className="w-8 h-8 text-gray-400" />
+                          ) : (
+                            <BookOpen className="w-8 h-8 text-blue-600" />
+                          )}
                         </div>
-                        <p className="text-gray-700 font-medium text-center">{course.title}</p>
-                        <p className="text-sm text-gray-500 mt-2">No thumbnail available</p>
-                        {process.env.NODE_ENV === 'development' && (
-                          <div className="mt-2 text-xs text-gray-400 text-center">
-                            Fields: {Object.keys(course).filter(k => 
-                              k.includes('thumb') || k.includes('image') || k.includes('cover')
-                            ).join(', ')}
-                          </div>
-                        )}
+                        <p className="text-gray-700 font-medium text-center text-sm">{course.title}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {imageFailed ? 'Image failed to load' : 'No thumbnail available'}
+                        </p>
                       </div>
                     )}
-                    
-                    {/* Hover overlay */}
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all duration-300"></div>
                   </div>
 
                   {/* Course Content */}
-                  <div className="p-6">
+                  <div className="p-6 flex-1 flex flex-col">
                     {/* Course Title */}
                     <h3 
-                      className="text-xl font-bold text-gray-900 mb-2 line-clamp-1 cursor-pointer hover:text-blue-600"
+                      className="text-xl font-bold text-gray-900 mb-2 line-clamp-2 cursor-pointer hover:text-blue-600 transition-colors"
                       onClick={() => goToCourseDetails(id)}
+                      title={course.title}
                     >
                       {course.title}
                     </h3>
                     
-                    <p className="text-gray-600 text-sm line-clamp-2 mb-4">
+                    {/* Course Description */}
+                    <p className="text-gray-600 text-sm line-clamp-3 mb-4 flex-1">
                       {course.description || 'No description available'}
                     </p>
+                    
+                    {/* Instructor Info */}
+                    {course.instructor && (
+                      <div className="flex items-center mb-4">
+                        <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center mr-2">
+                          <span className="text-xs font-semibold text-gray-700">
+                            {course.instructor.name?.charAt(0) || 'I'}
+                          </span>
+                        </div>
+                        <span className="text-sm text-gray-600">
+                          {course.instructor.name || 'Instructor'}
+                        </span>
+                      </div>
+                    )}
                     
                     {/* Course Stats */}
                     <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
                       <div className="flex items-center space-x-4">
-                        <span className="flex items-center">
-                          <BookOpen className="w-4 h-4 mr-1" />
-                          {totalLessons} lessons
+                        <span className="flex items-center" title="Lessons">
+                          <BookOpen className="w-4 h-4 mr-1 text-gray-400" />
+                          {totalLessons}
                         </span>
-                        <span className="flex items-center">
-                          <Clock className="w-4 h-4 mr-1" />
+                        <span className="flex items-center" title="Duration">
+                          <Clock className="w-4 h-4 mr-1 text-gray-400" />
                           {totalDuration}
                         </span>
-                        <span className="flex items-center">
-                          <Users className="w-4 h-4 mr-1" />
+                        <span className="flex items-center" title="Enrollments">
+                          <Users className="w-4 h-4 mr-1 text-gray-400" />
                           {course.enrollmentsCount || 0}
                         </span>
                       </div>
-                      <span className="flex items-center">
+                      <span className="flex items-center" title="Rating">
                         <Star className="w-4 h-4 text-yellow-500 mr-1" />
                         {(course.rating || 0).toFixed(1)}
                       </span>
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="space-y-3">
+                    <div className="space-y-3 mt-auto">
                       <button
                         onClick={(e) => goToCourseDetails(id, e)}
                         className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-colors duration-200 flex items-center justify-center"
@@ -452,18 +470,41 @@ const CoursesPage = () => {
           })}
         </div>
 
-        {/* Debug panel at bottom */}
+        {/* Debug panel */}
         {process.env.NODE_ENV === 'development' && courses.length > 0 && (
           <div className="mt-8 p-4 bg-gray-100 rounded-lg">
-            <details>
-              <summary className="cursor-pointer font-semibold text-gray-700">
-                Debug Information ({courses.length} courses)
+            <details className="cursor-pointer">
+              <summary className="font-semibold text-gray-700 mb-2">
+                📊 Debug Information ({courses.length} courses)
               </summary>
-              <div className="mt-2 text-sm">
-                <div>First course data:</div>
-                <pre className="bg-gray-800 text-gray-100 p-2 rounded mt-1 overflow-auto max-h-60">
-                  {JSON.stringify(courses[0], null, 2)}
-                </pre>
+              <div className="mt-2 text-sm space-y-4">
+                <div>
+                  <div className="font-medium mb-1">First course details:</div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-gray-800 text-gray-100 p-2 rounded">
+                      <div className="font-semibold">Course 1:</div>
+                      <pre className="overflow-auto max-h-32 mt-1">
+                        {JSON.stringify(courses[0], null, 2)}
+                      </pre>
+                    </div>
+                    <div className="bg-blue-900 text-blue-100 p-2 rounded">
+                      <div className="font-semibold">Thumbnail Analysis:</div>
+                      <div className="mt-1 space-y-1">
+                        <div>Field 'thumbnail': {courses[0].thumbnail ? '✅ Yes' : '❌ No'}</div>
+                        <div>Value: {courses[0].thumbnail || '(empty)'}</div>
+                        <div className="break-all">URL: {getThumbnailUrl(courses[0]) || '(none)'}</div>
+                        <div>Failed images: {Array.from(failedImages).join(', ') || '(none)'}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div>
+                  <div className="font-medium mb-1">Thumbnail Stats:</div>
+                  <div className="text-xs">
+                    {courses.filter(c => c.thumbnail).length} of {courses.length} courses have thumbnail field
+                  </div>
+                </div>
               </div>
             </details>
           </div>
