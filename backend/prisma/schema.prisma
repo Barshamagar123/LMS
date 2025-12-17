@@ -1,0 +1,293 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url = env("DATABASE_URL")
+}
+model User {
+  id            Int       @id @default(autoincrement())
+  name          String
+  email         String    @unique
+  password      String
+  role          Role
+  isApproved    Boolean   @default(false) // For Instructor approval
+  isActive      Boolean   @default(true)  // Admin can activate/deactivate
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  
+  title            String?   // Professional title e.g., "Senior Software Engineer"
+  bio              String?   // Biography/About section
+  profilePicture   String?   // Avatar/Profile image URL
+  company          String?   // Current company
+  experience       Int?      // Years of experience
+  website          String?   // Personal website
+  linkedin         String?   // LinkedIn profile URL
+  github           String?   // GitHub profile URL
+  twitter          String?   // Twitter handle
+  
+  // Status flags
+  profileCompleted Boolean   @default(false)
+  // Relationships\
+   adminOtps     AdminOtp[]     // ← opposite side of relation
+  refreshTokens RefreshToken[]
+  payments Payment[]
+  courses       Course[]        @relation("InstructorCourses")
+  enrollments   Enrollment[]
+  assignments   Assignment[]
+  messagesSent  Message[]       @relation("SentMessages")
+  messagesReceived Message[]    @relation("ReceivedMessages")
+  activities    Activity[]
+  reviews       Review[]
+  forumPosts    ForumPost[]
+}
+model AdminOtp {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  otpHash    String   // hashed OTP (bcrypt)
+  expiresAt  DateTime
+  attempts   Int      @default(0)
+  used       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id])
+}
+model RefreshToken {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  tokenHash    String   // hash of refresh token
+  expiresAt    DateTime
+  revoked      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id])
+}
+enum Role {
+  STUDENT
+  INSTRUCTOR
+  ADMIN
+}
+
+
+model Course {
+  id            Int       @id @default(autoincrement())
+  title         String
+  description   String
+  price         Float     @default(0)
+  status        CourseStatus @default(DRAFT) // Draft, Pending Approval, Published
+  rating        Float?    @default(0)
+  categoryId    Int
+  thumbnail     String?
+    level            String?   @default("ALL_LEVELS") // ADD THIS
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  instructorId  Int
+  instructor    User      @relation("InstructorCourses", fields: [instructorId], references: [id])
+
+  // Relationships
+  modules       Module[]
+  enrollments   Enrollment[]
+  assignments   Assignment[]
+  reviews       Review[]
+  announcements Announcement[]
+  forumPosts    ForumPost[]
+  payments      Payment[]
+  activities    Activity[]
+  category      Category  @relation(fields: [categoryId], references: [id])
+}
+
+enum CourseStatus {
+  DRAFT
+  PENDING_APPROVAL
+  PUBLISHED
+  ARCHIVED
+}
+
+model Category {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  courses   Course[]
+}
+
+model Module {
+  id        Int      @id @default(autoincrement())
+  title     String
+  order     Int
+  courseId  Int
+  course    Course   @relation(fields: [courseId], references: [id])
+  lessons   Lesson[]
+}
+
+model Lesson {
+  id           Int         @id @default(autoincrement())
+  title        String
+  contentUrl   String      // File path or cloud URL
+  contentType  ContentType
+  order        Int
+  moduleId     Int
+  module       Module      @relation(fields: [moduleId], references: [id])
+   lessonProgresses LessonProgress[]
+}
+
+enum ContentType {
+  VIDEO
+  AUDIO
+  PDF
+  DOC
+  OTHER
+}
+
+model Enrollment {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  courseId  Int
+  progress  Float    @default(0) // 0–100%
+  status    EnrollmentStatus @default(IN_PROGRESS)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  course    Course   @relation(fields: [courseId], references: [id])
+  lessonProgress LessonProgress[]
+}
+
+enum EnrollmentStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Payment {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  courseId      Int
+  amount        Float
+  status        PaymentStatus @default(PENDING)
+  paymentMethod String?
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id])
+  course        Course   @relation(fields: [courseId], references: [id])
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model Assignment {
+  id        Int      @id @default(autoincrement())
+  title     String
+  type      AssignmentType
+  content   String
+  courseId  Int
+  userId    Int?     // Student submission
+  grade     Float?
+  submitted Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  course    Course   @relation(fields: [courseId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id])
+}
+
+enum AssignmentType {
+  QUIZ
+  EXAM
+  HOMEWORK
+}
+
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  courseId  Int
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  course    Course   @relation(fields: [courseId], references: [id])
+}
+model LessonProgress {
+  id           Int        @id @default(autoincrement())
+  enrollmentId Int
+  lessonId     Int
+  completed    Boolean    @default(false)
+  lastTime     Float?     // For video/audio
+  lastPage     Int?       // For PDF
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
+  lesson       Lesson     @relation(fields: [lessonId], references: [id])
+
+  @@unique([enrollmentId, lessonId])
+}
+
+model ForumPost {
+  id        Int      @id @default(autoincrement())
+  courseId  Int
+  userId    Int
+  content   String
+  createdAt DateTime @default(now())
+  parentId  Int?     // For replies
+
+  course    Course   @relation(fields: [courseId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Announcement {
+  id        Int      @id @default(autoincrement())
+  courseId  Int
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+
+  course    Course   @relation(fields: [courseId], references: [id])
+}
+
+model Message {
+  id         Int      @id @default(autoincrement())
+  senderId   Int
+  receiverId Int
+  content    String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+}
+
+model Activity {
+  id        Int       @id @default(autoincrement())
+  userId    Int?      // Admin or user performing the action
+  courseId  Int?      // Related course
+  type      ActivityType
+  message   String
+  createdAt DateTime  @default(now())
+
+  user      User?     @relation(fields: [userId], references: [id])
+  course    Course?   @relation(fields: [courseId], references: [id])
+}
+
+enum ActivityType {
+  USER_CREATED
+  USER_UPDATED
+  USER_DEACTIVATED
+  COURSE_CREATED
+  COURSE_UPDATED
+  COURSE_APPROVED
+  COURSE_REJECTED
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  OTHER
+}
