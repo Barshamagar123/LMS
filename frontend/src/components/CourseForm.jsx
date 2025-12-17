@@ -1,1022 +1,1310 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { 
-  Plus, Trash2, Video, FileText, Music, File, FileQuestion, Upload, X, 
-  BookOpen, DollarSign, Tag, Settings, Loader, AlertCircle, CheckCircle, LogIn,
-  Image, Eye, Camera, ChevronRight
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import {
+  ArrowLeft, Save, X, Plus, Trash2, Upload, Video, FileText,
+  Music, File, FileQuestion, BookOpen, DollarSign, Tag,
+  Settings, Loader, AlertCircle, CheckCircle, Calendar,
+  Eye, Users, Star, Clock, ChevronRight,
+  TrendingUp, Image, Layers, Check, ChevronLeft, AlertTriangle,
+  FileVideo, FileAudio, FileImage
 } from 'lucide-react';
 import API from '../api/axios';
 
-const CourseForm = ({ onCourseCreated }) => {
+const CourseForm = () => {
   const navigate = useNavigate();
+  const [currentStep, setCurrentStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   
-  // Form state
+  // Store field-specific errors
+  const [fieldErrors, setFieldErrors] = useState({
+    title: '',
+    description: '',
+    categoryId: '',
+    price: ''
+  });
+  
+  // Store file upload errors per lesson
+  const [fileErrors, setFileErrors] = useState({});
+  
+  // Form states
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    shortDescription: '',
-    priceType: 'free',
     price: 0,
-    status: 'PUBLISHED',
+    status: 'DRAFT',
     categoryId: '',
-    thumbnail: '',
-    level: 'ALL_LEVELS'
+    level: 'ALL_LEVELS',
+    thumbnail: null,
+    thumbnailPreview: null
   });
   
-  const [thumbnailFile, setThumbnailFile] = useState(null);
-  const [thumbnailPreview, setThumbnailPreview] = useState('');
-  const [modules, setModules] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingCategories, setLoadingCategories] = useState(false);
-  const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isInstructor, setIsInstructor] = useState(false);
-  const [step, setStep] = useState(1);
+  // Initialize with one module that has a lesson
+  const [modules, setModules] = useState([{
+    id: `module-${Date.now()}`,
+    title: 'Introduction',
+    order: 1,
+    lessons: [{
+      id: `lesson-${Date.now()}`,
+      title: 'Introduction Video',
+      contentUrl: '',
+      contentType: 'VIDEO',
+      file: null,
+      order: 1,
+      isFileUploaded: false
+    }]
+  }]);
   
-  const fileInputRef = useRef(null);
+  const [categories, setCategories] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  
+  // Refs
   const thumbnailInputRef = useRef(null);
-  const [currentLessonFile, setCurrentLessonFile] = useState(null);
+  const lessonFileInputRefs = useRef({});
 
-  // Check authentication
+  // Level options
+  const levelOptions = [
+    { value: 'ALL_LEVELS', label: 'All Levels' },
+    { value: 'BEGINNER', label: 'Beginner' },
+    { value: 'INTERMEDIATE', label: 'Intermediate' },
+    { value: 'ADVANCED', label: 'Advanced' }
+  ];
+
+  // Status options
+  const statusOptions = [
+    { value: 'DRAFT', label: 'Draft' },
+    { value: 'PENDING_APPROVAL', label: 'Pending Approval' },
+    { value: 'PUBLISHED', label: 'Published' },
+    { value: 'ARCHIVED', label: 'Archived' }
+  ];
+
+  // Check authentication and fetch categories
   useEffect(() => {
-    checkAuth();
-  }, []);
-
-  // Fetch categories when authenticated and is instructor
-  useEffect(() => {
-    if (isAuthenticated && isInstructor) {
-      fetchCategories();
+    const storedUser = localStorage.getItem('user');
+    if (!storedUser) {
+      navigate('/login');
+      return;
     }
-  }, [isAuthenticated, isInstructor]);
 
-  const checkAuth = async () => {
-    try {
-      const storedUser = localStorage.getItem('user');
-      if (!storedUser) throw new Error('No user found');
-      
-      const user = JSON.parse(storedUser);
-      if (!user.token) throw new Error('No token found');
-      
-      // Verify token by calling user endpoint
-      const response = await API.get('/users/me');
-      const userData = response.data;
-      
-      if (userData.role === 'INSTRUCTOR') {
-        setIsAuthenticated(true);
-        setIsInstructor(true);
-      } else {
-        setIsAuthenticated(true);
-        setIsInstructor(false);
-        setError('Only instructors can create courses. Please contact admin.');
-      }
-    } catch (err) {
-      console.error('Auth check failed:', err);
-      setIsAuthenticated(false);
-      setIsInstructor(false);
+    const user = JSON.parse(storedUser);
+    setCurrentUser(user);
+
+    if (user.role !== 'INSTRUCTOR') {
+      setError('Only instructors can create courses');
+      return;
     }
-  };
+
+    fetchCategories();
+  }, [navigate]);
 
   const fetchCategories = async () => {
     try {
-      setLoadingCategories(true);
+      setLoading(true);
       const response = await API.get('/categories');
       setCategories(response.data || []);
-    } catch (err) {
-      console.error('Failed to fetch categories:', err);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
       setError('Failed to load categories');
-    } finally {
-      setLoadingCategories(false);
-    }
-  };
-
-  // Handle form field changes
-  const handleChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  // Thumbnail handling - UPDATED
-  const handleThumbnailChange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    // Validate file
-    const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'image/gif'];
-    if (!validTypes.includes(file.type)) {
-      setError('Please select a valid image file (JPEG, PNG, GIF, WebP)');
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image size must be less than 5MB');
-      return;
-    }
-
-    setThumbnailFile(file);
-    
-    // Create preview
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setThumbnailPreview(reader.result);
-    };
-    reader.readAsDataURL(file);
-
-    // Upload thumbnail immediately
-    await uploadThumbnail(file);
-  };
-
-  // Upload thumbnail - FIXED endpoint
-  const uploadThumbnail = async (file) => {
-    setUploadingThumbnail(true);
-    setError('');
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      // Use correct endpoint - remove /api prefix if axios baseURL already includes it
-      const response = await API.post('/courses/upload-thumbnail', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-
-      if (response.data.success && response.data.url) {
-        const thumbnailUrl = response.data.url;
-        handleChange('thumbnail', thumbnailUrl);
-        setSuccess('Thumbnail uploaded successfully!');
-        return thumbnailUrl;
-      } else {
-        throw new Error(response.data.message || 'Upload failed');
-      }
-    } catch (err) {
-      console.error('Thumbnail upload error:', err);
-      setError(err.response?.data?.message || err.message || 'Failed to upload thumbnail');
-      return null;
-    } finally {
-      setUploadingThumbnail(false);
-    }
-  };
-
-  const removeThumbnail = () => {
-    setThumbnailFile(null);
-    setThumbnailPreview('');
-    handleChange('thumbnail', '');
-  };
-
-  // Module and lesson management (simplified)
-  const addModule = () => {
-    setModules(prev => [...prev, {
-      id: Date.now(),
-      title: '',
-      description: '',
-      lessons: [],
-      order: prev.length + 1
-    }]);
-  };
-
-  const updateModule = (index, field, value) => {
-    setModules(prev => {
-      const updated = [...prev];
-      updated[index][field] = value;
-      return updated;
-    });
-  };
-
-  const removeModule = (index) => {
-    setModules(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const addLesson = (moduleIndex) => {
-    setModules(prev => {
-      const updated = [...prev];
-      updated[moduleIndex].lessons.push({
-        id: Date.now(),
-        title: '',
-        description: '',
-        contentType: 'VIDEO',
-        duration: 0,
-        file: null,
-        order: updated[moduleIndex].lessons.length + 1
-      });
-      return updated;
-    });
-  };
-
-  const updateLesson = (moduleIndex, lessonIndex, field, value) => {
-    setModules(prev => {
-      const updated = [...prev];
-      updated[moduleIndex].lessons[lessonIndex][field] = value;
-      return updated;
-    });
-  };
-
-  const removeLesson = (moduleIndex, lessonIndex) => {
-    setModules(prev => {
-      const updated = [...prev];
-      updated[moduleIndex].lessons = updated[moduleIndex].lessons.filter((_, i) => i !== lessonIndex);
-      return updated;
-    });
-  };
-
-  // Main submit handler - UPDATED
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    setSuccess('');
-
-    try {
-      // Validation
-      if (!formData.title.trim()) throw new Error('Course title is required');
-      if (!formData.description.trim()) throw new Error('Description is required');
-      if (!formData.categoryId) throw new Error('Category is required');
-      if (!formData.thumbnail) throw new Error('Thumbnail is required');
-
-      // Create course
-      const courseData = {
-        title: formData.title.trim(),
-        description: formData.description.trim(),
-        shortDescription: formData.shortDescription.trim() || undefined,
-        price: formData.priceType === 'free' ? 0 : Number(formData.price),
-        status: formData.status,
-        categoryId: Number(formData.categoryId),
-        thumbnail: formData.thumbnail,
-        level: formData.level
-      };
-
-      console.log('Creating course with:', courseData);
-
-      const response = await API.post('/courses', courseData);
-      const createdCourse = response.data;
-
-      console.log('Course created:', createdCourse);
-
-      // Upload lesson files if any (in background)
-      if (modules.length > 0) {
-        uploadLessonFiles(createdCourse.id);
-      }
-
-      setSuccess(`Course "${createdCourse.title}" created successfully! Redirecting...`);
-      
-      if (onCourseCreated) {
-        onCourseCreated(createdCourse);
-      }
-
-      // Redirect after 2 seconds
-      setTimeout(() => {
-        navigate(`/courses/${createdCourse.id}`);
-      }, 2000);
-
-    } catch (err) {
-      console.error('Create course error:', err);
-      
-      if (err.response?.status === 401) {
-        setError('Session expired. Please login again.');
-        localStorage.removeItem('user');
-        navigate('/login');
-      } else if (err.response?.status === 400) {
-        const errorData = err.response.data;
-        if (errorData.errors) {
-          const messages = errorData.errors.map(e => `${e.field}: ${e.message}`).join(', ');
-          setError(messages);
-        } else {
-          setError(errorData.message || 'Validation error');
-        }
-      } else {
-        setError(err.response?.data?.message || err.message || 'Failed to create course');
-      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Upload lesson files in background
-  const uploadLessonFiles = async (courseId) => {
-    const lessonFiles = [];
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
     
-    // Collect all lesson files
-    modules.forEach((module, mIndex) => {
-      module.lessons.forEach((lesson, lIndex) => {
-        if (lesson.file) {
-          lessonFiles.push({
-            moduleIndex: mIndex,
-            lessonIndex: lIndex,
-            file: lesson.file,
-            lesson
-          });
+    // Clear field error when user starts typing
+    if (fieldErrors[name]) {
+      setFieldErrors(prev => ({ ...prev, [name]: '' }));
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      [name]: name === 'price' ? Number(value) : value
+    }));
+  };
+
+  // Validate individual fields
+  const validateField = (name, value) => {
+    const errors = { ...fieldErrors };
+    
+    switch (name) {
+      case 'title':
+        if (!value.trim()) {
+          errors.title = 'Title is required';
+        } else if (value.trim().length < 3) {
+          errors.title = 'Title must be at least 3 characters';
+        } else if (value.trim().length > 200) {
+          errors.title = 'Title cannot exceed 200 characters';
+        } else {
+          errors.title = '';
         }
-      });
-    });
-
-    // Upload each file
-    for (const item of lessonFiles) {
-      try {
-        const formData = new FormData();
-        formData.append('file', item.file);
-        formData.append('lessonId', item.lesson.id);
-        formData.append('courseId', courseId);
-        formData.append('contentType', item.lesson.contentType);
-
-        await API.post('/lessons/upload', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        break;
         
-        console.log(`Uploaded file for lesson: ${item.lesson.title}`);
-      } catch (err) {
-        console.error('Failed to upload lesson file:', err);
-      }
+      case 'description':
+        if (!value.trim()) {
+          errors.description = 'Description is required';
+        } else if (value.trim().length < 5) {
+          errors.description = 'Description must be at least 5 characters';
+        } else if (value.trim().length > 5000) {
+          errors.description = 'Description cannot exceed 5000 characters';
+        } else {
+          errors.description = '';
+        }
+        break;
+        
+      case 'categoryId':
+        if (!value) {
+          errors.categoryId = 'Please select a category';
+        } else {
+          errors.categoryId = '';
+        }
+        break;
+        
+      case 'price':
+        if (isNaN(value) || value < 0) {
+          errors.price = 'Price must be a non-negative number';
+        } else {
+          errors.price = '';
+        }
+        break;
+    }
+    
+    setFieldErrors(errors);
+    return errors[name] === '';
+  };
+
+  const handleThumbnailUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setError('Only image files are allowed (JPEG, PNG, GIF, WebP)');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Image size should be less than 2MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFormData(prev => ({
+        ...prev,
+        thumbnail: file,
+        thumbnailPreview: reader.result
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeThumbnail = () => {
+    setFormData(prev => ({
+      ...prev,
+      thumbnail: null,
+      thumbnailPreview: null
+    }));
+  };
+
+  // Module management
+  const addModule = () => {
+    const newModuleId = `module-${Date.now() + Math.random()}`;
+    setModules([...modules, {
+      id: newModuleId,
+      title: '',
+      order: modules.length + 1,
+      lessons: []
+    }]);
+  };
+
+  const removeModule = (moduleId) => {
+    if (modules.length <= 1) {
+      setError('Course must have at least one module');
+      return;
+    }
+    setModules(modules.filter(module => module.id !== moduleId));
+  };
+
+  const updateModule = (moduleId, field, value) => {
+    setModules(modules.map(module => 
+      module.id === moduleId ? { ...module, [field]: value } : module
+    ));
+  };
+
+  // Lesson management
+  const addLesson = (moduleId) => {
+    const newLessonId = `lesson-${Date.now() + Math.random()}`;
+    setModules(modules.map(module =>
+      module.id === moduleId
+        ? {
+            ...module,
+            lessons: [...module.lessons, {
+              id: newLessonId,
+              title: '',
+              contentUrl: '',
+              contentType: 'VIDEO',
+              file: null,
+              order: module.lessons.length + 1,
+              isFileUploaded: false
+            }]
+          }
+        : module
+    ));
+  };
+
+  const removeLesson = (moduleId, lessonId) => {
+    setModules(modules.map(module =>
+      module.id === moduleId
+        ? {
+            ...module,
+            lessons: module.lessons.filter(lesson => lesson.id !== lessonId)
+          }
+        : module
+    ));
+    
+    setFileErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[lessonId];
+      return newErrors;
+    });
+  };
+
+  const updateLesson = (moduleId, lessonId, field, value) => {
+    setModules(modules.map(module =>
+      module.id === moduleId
+        ? {
+            ...module,
+            lessons: module.lessons.map(lesson =>
+              lesson.id === lessonId ? { ...lesson, [field]: value } : lesson
+            )
+          }
+        : module
+    ));
+  };
+
+  // File upload handler
+  const handleLessonFileUpload = (moduleId, lessonId, e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const validTypes = [
+      'video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo',
+      'audio/mpeg', 'audio/wav', 'audio/ogg',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+
+    if (!validTypes.includes(file.type)) {
+      const errorMsg = 'Please upload a valid file (video, audio, PDF, or document)';
+      setFileErrors(prev => ({ ...prev, [lessonId]: errorMsg }));
+      return;
+    }
+
+    const maxSize = file.type.startsWith('video/') ? 500 * 1024 * 1024 : 50 * 1024 * 1024;
+    if (file.size > maxSize) {
+      const errorMsg = `File too large. Maximum size: ${file.type.startsWith('video/') ? '500MB' : '50MB'}`;
+      setFileErrors(prev => ({ ...prev, [lessonId]: errorMsg }));
+      return;
+    }
+
+    let contentType = 'VIDEO';
+    if (file.type.startsWith('audio/')) contentType = 'AUDIO';
+    else if (file.type === 'application/pdf') contentType = 'PDF';
+    else if (file.type.includes('document')) contentType = 'DOC';
+
+    const tempFilePath = `/temp-uploads/${Date.now()}-${file.name}`;
+    
+    setModules(prevModules => 
+      prevModules.map(module =>
+        module.id === moduleId
+          ? {
+              ...module,
+              lessons: module.lessons.map(lesson =>
+                lesson.id === lessonId
+                  ? {
+                      ...lesson,
+                      file: file,
+                      contentUrl: tempFilePath,
+                      contentType: contentType,
+                      isFileUploaded: true,
+                      lastUpdated: Date.now()
+                    }
+                  : lesson
+              )
+            }
+          : module
+      )
+    );
+
+    setFileErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[lessonId];
+      return newErrors;
+    });
+    
+    setError('');
+  };
+
+  const createFileInput = (moduleId, lessonId) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'video/*,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*';
+    
+    input.onchange = (e) => {
+      handleLessonFileUpload(moduleId, lessonId, e);
+      input.value = '';
+    };
+    
+    return input;
+  };
+
+  // Navigation
+  const nextStep = () => {
+    if (validateStep(currentStep)) {
+      setCurrentStep(prev => Math.min(prev + 1, 3));
     }
   };
 
-  // Add this function for form validation before step changes
-  const validateStep = (stepNumber) => {
-    switch (stepNumber) {
+  const prevStep = () => {
+    setCurrentStep(prev => Math.max(prev - 1, 1));
+  };
+
+  // Step validation - IMPROVED
+  const validateStep = (step) => {
+    setError('');
+    setFileErrors({});
+    
+    let isValid = true;
+    
+    switch (step) {
       case 1:
-        if (!formData.title.trim()) {
-          setError('Please enter a course title');
-          return false;
+        // Validate all fields
+        const titleValid = validateField('title', formData.title);
+        const descriptionValid = validateField('description', formData.description);
+        const categoryValid = validateField('categoryId', formData.categoryId);
+        const priceValid = validateField('price', formData.price.toString());
+        
+        if (!titleValid || !descriptionValid || !categoryValid || !priceValid) {
+          isValid = false;
+          setError('Please fix all validation errors before proceeding');
         }
-        if (!formData.categoryId) {
-          setError('Please select a category');
-          return false;
-        }
-        if (!formData.thumbnail) {
-          setError('Please upload a thumbnail');
-          return false;
-        }
-        return true;
+        return isValid;
+      
       case 2:
-        // Module validation (optional)
-        return true;
+        for (const module of modules) {
+          if (!module.title.trim()) {
+            setError(`Module "${module.order}" title is required`);
+            return false;
+          }
+          
+          for (const lesson of module.lessons) {
+            if (!lesson.title.trim()) {
+              setError(`Lesson title in module "${module.order}" is required`);
+              return false;
+            }
+            
+            if (!lesson.file && !lesson.isFileUploaded) {
+              const errorMsg = `Please upload a file for lesson "${lesson.title || `Lesson ${lesson.order}`}"`;
+              setFileErrors(prev => ({ ...prev, [lesson.id]: errorMsg }));
+              
+              if (!error) {
+                setError(`Please upload files for all lessons. Missing file for: "${lesson.title || `Lesson ${lesson.order}`}"`);
+              }
+              isValid = false;
+            }
+          }
+        }
+        
+        if (Object.keys(fileErrors).length > 0) {
+          if (!error) {
+            setError('Please fix all file upload errors before proceeding');
+          }
+          isValid = false;
+        }
+        
+        return isValid;
+      
       default:
         return true;
     }
   };
 
-  const goToNextStep = () => {
-    if (validateStep(step)) {
-      setStep(prev => Math.min(prev + 1, 3));
-      setError('');
+  // Get file icon
+  const getFileIcon = (contentType) => {
+    switch (contentType) {
+      case 'VIDEO': return <FileVideo className="w-5 h-5 text-blue-600" />;
+      case 'AUDIO': return <FileAudio className="w-5 h-5 text-purple-600" />;
+      case 'PDF': return <FileText className="w-5 h-5 text-red-600" />;
+      case 'DOC': return <File className="w-5 h-5 text-gray-600" />;
+      default: return <FileQuestion className="w-5 h-5 text-gray-600" />;
     }
   };
 
-  const goToPrevStep = () => {
-    setStep(prev => Math.max(prev - 1, 1));
-    setError('');
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'DRAFT': return 'bg-amber-100 text-amber-800 border-amber-200';
+      case 'PENDING_APPROVAL': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'PUBLISHED': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      case 'ARCHIVED': return 'bg-gray-100 text-gray-800 border-gray-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
   };
 
-  // Login required screen
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-12">
-        <div className="max-w-md mx-auto px-4">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Course</h1>
-            <p className="text-gray-600">Login required to continue</p>
-          </div>
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // ========== UPDATED handleSubmit FUNCTION ==========
+  const handleSubmit = async () => {
+    // Validate all fields before submitting
+    if (!validateStep(1) || !validateStep(2)) {
+      setError('Please fix all validation errors before submitting');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      console.log('🚀 Starting course creation...');
+      console.log('Form data:', formData);
+      
+      // Get category ID - must be a valid number
+      const categoryId = formData.categoryId ? parseInt(formData.categoryId, 10) : null;
+      
+      if (!categoryId) {
+        throw new Error('Please select a valid category');
+      }
+
+      // Prepare course data - EXACTLY as backend expects
+      const courseData = {
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        price: parseFloat(formData.price) || 0,
+        status: formData.status,
+        categoryId: categoryId,
+        level: formData.level
+        // instructorId will be added by backend middleware
+      };
+
+      console.log('📤 Sending course data:', courseData);
+      console.log('Validation check:', {
+        titleLength: courseData.title.length,
+        descriptionLength: courseData.description.length,
+        categoryIdType: typeof courseData.categoryId,
+        priceType: typeof courseData.price
+      });
+
+      // Send course creation request
+      const courseResponse = await API.post('/courses', courseData);
+      console.log('✅ Course creation response:', courseResponse.data);
+
+      const courseId = courseResponse.data.id || courseResponse.data.data?.id;
+      
+      if (!courseId) {
+        throw new Error('No course ID returned from server');
+      }
+
+      console.log('🎉 Course created with ID:', courseId);
+
+      // 2. Upload thumbnail if exists
+      if (formData.thumbnail) {
+        setUploading(true);
+        console.log('📤 Uploading thumbnail...');
+        
+        try {
+          const thumbnailFormData = new FormData();
+          thumbnailFormData.append('file', formData.thumbnail);
           
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 text-center">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <LogIn className="w-8 h-8 text-blue-600" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">Authentication Required</h2>
-            <p className="text-gray-600 mb-6">
-              Please login to create and manage courses.
-            </p>
-            <button
-              onClick={() => navigate('/login')}
-              className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all font-semibold shadow-lg"
-            >
-              Go to Login
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+          await API.post(`/courses/${courseId}/thumbnail`, thumbnailFormData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          console.log('✅ Thumbnail uploaded');
+        } catch (thumbnailError) {
+          console.warn('⚠️ Thumbnail upload failed:', thumbnailError.message);
+        } finally {
+          setUploading(false);
+        }
+      }
 
-  // Not instructor screen
-  if (!isInstructor) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-12">
-        <div className="max-w-md mx-auto px-4">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Create Course</h1>
-            <p className="text-gray-600">Instructor access required</p>
-          </div>
+      // 3. Create modules and lessons (if any)
+      if (modules.length > 0) {
+        console.log(`📚 Creating ${modules.length} modules...`);
+        
+        for (const [moduleIndex, module] of modules.entries()) {
+          console.log(`Creating module ${moduleIndex + 1}: "${module.title}"`);
           
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 text-center">
-            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <BookOpen className="w-8 h-8 text-amber-600" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">Instructor Access Required</h2>
-            <p className="text-gray-600 mb-6">
-              You need to be an approved instructor to create courses.
-            </p>
-            <div className="space-y-3">
-              <button
-                onClick={() => navigate('/profile')}
-                className="w-full py-3 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl hover:from-amber-700 hover:to-orange-700 transition-all font-semibold"
-              >
-                Apply as Instructor
-              </button>
-              <button
-                onClick={() => navigate('/courses')}
-                className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-semibold"
-              >
-                Browse Courses
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+          try {
+            // Create module
+            const moduleData = {
+              title: module.title.trim(),
+              order: module.order,
+              courseId: courseId
+            };
+            
+            const moduleResponse = await API.post('/modules', moduleData);
+            console.log(`✅ Module created:`, moduleResponse.data);
+            
+            const moduleId = moduleResponse.data.id || moduleResponse.data.data?.id;
+            
+            if (!moduleId) {
+              console.warn(`⚠️ No module ID returned`);
+              continue;
+            }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8">
-      <div className="max-w-4xl mx-auto px-4">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="inline-flex items-center gap-3 bg-white rounded-2xl px-6 py-3 shadow-sm border border-gray-200">
-            <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
-              <BookOpen className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Create New Course</h1>
-              <p className="text-sm text-gray-600">Step {step} of 3</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Progress Steps */}
-        <div className="mb-8 bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between mb-2">
-            {['Basic Info', 'Content', 'Review'].map((label, index) => (
-              <div key={label} className="flex flex-col items-center">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 ${
-                  step > index + 1 ? 'bg-green-500 text-white' :
-                  step === index + 1 ? 'bg-blue-600 text-white' :
-                  'bg-gray-200 text-gray-600'
-                }`}>
-                  {step > index + 1 ? '✓' : index + 1}
-                </div>
-                <span className={`text-sm font-medium ${
-                  step >= index + 1 ? 'text-gray-900' : 'text-gray-500'
-                }`}>
-                  {label}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Error/Success Messages */}
-        {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-            <span className="text-red-700">{error}</span>
-          </div>
-        )}
-
-        {success && (
-          <div className="mb-6 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
-            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-            <span className="text-green-700">{success}</span>
-          </div>
-        )}
-
-        {/* Hidden file inputs */}
-        <input 
-          type="file" 
-          ref={thumbnailInputRef} 
-          onChange={handleThumbnailChange} 
-          className="hidden" 
-          accept="image/*"
-        />
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          onChange={handleFileSelect} 
-          className="hidden" 
-          accept="video/*,audio/*,image/*,application/pdf,.doc,.docx,.txt,.ppt,.pptx"
-        />
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-          {/* Step 1: Basic Info */}
-          {step === 1 && (
-            <div className="p-8 space-y-8">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  Course Details
-                </h2>
+            // Create lessons for this module
+            if (module.lessons.length > 0) {
+              console.log(`Creating ${module.lessons.length} lessons...`);
+              
+              for (const [lessonIndex, lesson] of module.lessons.entries()) {
+                console.log(`Creating lesson ${lessonIndex + 1}: "${lesson.title}"`);
                 
-                {/* Thumbnail Upload */}
-                <div className="mb-8">
-                  <label className="block text-sm font-semibold text-gray-900 mb-4">
-                    Course Thumbnail *
-                  </label>
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div>
-                      {thumbnailPreview ? (
-                        <div className="relative">
-                          <img 
-                            src={thumbnailPreview} 
-                            alt="Thumbnail preview" 
-                            className="w-full h-64 object-cover rounded-xl border-2 border-gray-200"
-                          />
-                          <div className="absolute top-2 right-2 flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => thumbnailInputRef.current?.click()}
-                              className="p-2 bg-white rounded-lg shadow hover:bg-gray-50"
-                            >
-                              <Camera className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={removeThumbnail}
-                              className="p-2 bg-red-500 text-white rounded-lg shadow hover:bg-red-600"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div
-                          onClick={() => thumbnailInputRef.current?.click()}
-                          className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all"
-                        >
-                          {uploadingThumbnail ? (
-                            <>
-                              <Loader className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-3" />
-                              <div className="text-sm text-blue-600">Uploading...</div>
-                            </>
-                          ) : (
-                            <>
-                              <Upload className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-                              <div className="font-medium text-gray-700 mb-1">Upload Thumbnail</div>
-                              <div className="text-sm text-gray-500">16:9 ratio, max 5MB</div>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-4">
-                      <h3 className="font-semibold text-gray-900">Guidelines</h3>
-                      <ul className="space-y-2 text-sm text-gray-600">
-                        <li className="flex items-start gap-2">
-                          <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">✓</div>
-                          <span>Use bright, engaging images</span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">✓</div>
-                          <span>1280x720px recommended</span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">✓</div>
-                          <span>Add text overlay if needed</span>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
+                if (lesson.file) {
+                  setUploading(true);
+                  
+                  try {
+                    // Upload lesson file
+                    const lessonFormData = new FormData();
+                    lessonFormData.append('file', lesson.file);
+                    lessonFormData.append('title', lesson.title.trim());
+                    lessonFormData.append('contentType', lesson.contentType);
+                    lessonFormData.append('order', lesson.order);
 
-                {/* Form Fields */}
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-6">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">
-                        Course Title *
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.title}
-                        onChange={(e) => handleChange('title', e.target.value)}
-                        placeholder="Enter course title"
-                        className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        required
-                      />
-                    </div>
+                    await API.post(`/modules/${moduleId}/lessons/upload`, lessonFormData, {
+                      headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+                    
+                    console.log(`✅ Lesson uploaded`);
+                  } catch (lessonError) {
+                    console.warn(`⚠️ Lesson upload failed:`, lessonError.message);
+                  } finally {
+                    setUploading(false);
+                  }
+                }
+              }
+            }
+          } catch (moduleError) {
+            console.warn(`⚠️ Module creation failed:`, moduleError.message);
+          }
+        }
+      }
 
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">
-                        Category *
-                      </label>
-                      <select
-                        value={formData.categoryId}
-                        onChange={(e) => handleChange('categoryId', e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        required
-                        disabled={loadingCategories}
-                      >
-                        <option value="">{loadingCategories ? 'Loading...' : 'Select Category'}</option>
-                        {categories.map(cat => (
-                          <option key={cat.id} value={cat.id}>{cat.name}</option>
-                        ))}
-                      </select>
-                    </div>
+      setSuccess('✅ Course created successfully! Redirecting...');
+      console.log('🎉 Course creation complete!');
 
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">
-                        Course Level
-                      </label>
-                      <select
-                        value={formData.level}
-                        onChange={(e) => handleChange('level', e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value="ALL_LEVELS">All Levels</option>
-                        <option value="BEGINNER">Beginner</option>
-                        <option value="INTERMEDIATE">Intermediate</option>
-                        <option value="ADVANCED">Advanced</option>
-                      </select>
-                    </div>
-                  </div>
+      // Redirect
+      setTimeout(() => {
+        navigate(`/instructor/courses/${courseId}/edit`);
+      }, 2000);
 
-                  <div className="space-y-6">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">
-                        Description *
-                      </label>
-                      <textarea
-                        value={formData.description}
-                        onChange={(e) => handleChange('description', e.target.value)}
-                        placeholder="Describe what students will learn..."
-                        rows={5}
-                        className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                        required
-                      />
-                    </div>
+    } catch (error) {
+      console.error('❌ Error creating course:', error);
+      
+      let errorMessage = 'Failed to create course';
+      let fieldErrors = {};
+      
+      if (error.response?.data?.errors) {
+        // Handle backend validation errors
+        error.response.data.errors.forEach(err => {
+          fieldErrors[err.field] = err.message;
+        });
+        
+        setFieldErrors(prev => ({ ...prev, ...fieldErrors }));
+        errorMessage = error.response.data.message || 'Validation failed';
+        
+        // Show first error as main error
+        if (error.response.data.errors.length > 0) {
+          const firstError = error.response.data.errors[0];
+          errorMessage = `${firstError.field}: ${firstError.message}`;
+        }
+        
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.request) {
+        errorMessage = 'Cannot connect to server. Please check if backend is running.';
+      } else {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
+      
+    } finally {
+      setSaving(false);
+      setUploading(false);
+    }
+  };
+  // ========== END OF handleSubmit ==========
 
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">
-                        Short Description
-                      </label>
-                      <textarea
-                        value={formData.shortDescription}
-                        onChange={(e) => handleChange('shortDescription', e.target.value)}
-                        placeholder="Brief summary (optional)"
-                        rows={2}
-                        className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                      />
-                    </div>
+  // Render Step 1: Basic Information - WITH VALIDATION
+  const renderStep1 = () => (
+    <div className="space-y-6">
+      <div>
+        <label className="block text-sm font-medium text-gray-900 mb-2">
+          Course Title * (3-200 characters)
+        </label>
+        <input
+          type="text"
+          name="title"
+          value={formData.title}
+          onChange={handleInputChange}
+          onBlur={() => validateField('title', formData.title)}
+          className={`w-full border rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+            fieldErrors.title ? 'border-red-500' : 'border-gray-300'
+          }`}
+          placeholder="e.g., Complete Web Development Bootcamp"
+          minLength={3}
+          maxLength={200}
+          required
+        />
+        {fieldErrors.title && (
+          <p className="mt-1 text-sm text-red-600">{fieldErrors.title}</p>
+        )}
+        <p className="mt-1 text-xs text-gray-500">
+          {formData.title.length}/200 characters • Minimum 3 characters
+        </p>
+      </div>
 
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-2">
-                        Status
-                      </label>
-                      <select
-                        value={formData.status}
-                        onChange={(e) => handleChange('status', e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value="DRAFT">Draft</option>
-                        <option value="PUBLISHED">Published</option>
-                        <option value="PENDING_APPROVAL">Pending Approval</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-900 mb-2">
+          Description * (5-5000 characters)
+        </label>
+        <textarea
+          name="description"
+          value={formData.description}
+          onChange={handleInputChange}
+          onBlur={() => validateField('description', formData.description)}
+          rows={6}
+          className={`w-full border rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none ${
+            fieldErrors.description ? 'border-red-500' : 'border-gray-300'
+          }`}
+          placeholder="Detailed course description..."
+          minLength={5}
+          maxLength={5000}
+          required
+        />
+        {fieldErrors.description && (
+          <p className="mt-1 text-sm text-red-600">{fieldErrors.description}</p>
+        )}
+        <p className="mt-1 text-xs text-gray-500">
+          {formData.description.length}/5000 characters • Minimum 5 characters
+        </p>
+      </div>
 
-                {/* Pricing */}
-                <div className="mt-8 pt-8 border-t border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Pricing</h3>
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-900 mb-3">
-                        Price Type
-                      </label>
-                      <div className="flex gap-4">
-                        <button
-                          type="button"
-                          onClick={() => handleChange('priceType', 'free')}
-                          className={`px-6 py-3 rounded-lg border-2 ${
-                            formData.priceType === 'free'
-                              ? 'border-green-500 bg-green-50 text-green-700'
-                              : 'border-gray-300 bg-gray-50 text-gray-600 hover:border-gray-400'
-                          }`}
-                        >
-                          Free
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleChange('priceType', 'paid')}
-                          className={`px-6 py-3 rounded-lg border-2 ${
-                            formData.priceType === 'paid'
-                              ? 'border-blue-500 bg-blue-50 text-blue-700'
-                              : 'border-gray-300 bg-gray-50 text-gray-600 hover:border-gray-400'
-                          }`}
-                        >
-                          Paid
-                        </button>
-                      </div>
-                    </div>
+      <div className="grid md:grid-cols-3 gap-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-2">
+            Price ($) - Optional
+          </label>
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+            <input
+              type="number"
+              name="price"
+              value={formData.price}
+              onChange={handleInputChange}
+              onBlur={() => validateField('price', formData.price.toString())}
+              min="0"
+              step="0.01"
+              className={`w-full border rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                fieldErrors.price ? 'border-red-500' : 'border-gray-300'
+              }`}
+            />
+          </div>
+          {fieldErrors.price && (
+            <p className="mt-1 text-sm text-red-600">{fieldErrors.price}</p>
+          )}
+        </div>
 
-                    {formData.priceType === 'paid' && (
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-900 mb-2">
-                          Price ($)
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                          <input
-                            type="number"
-                            value={formData.price}
-                            onChange={(e) => handleChange('price', e.target.value)}
-                            min={0}
-                            step="0.01"
-                            className="w-full border border-gray-300 rounded-lg pl-8 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="49.99"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-2">
+            Category *
+          </label>
+          <select
+            name="categoryId"
+            value={formData.categoryId}
+            onChange={handleInputChange}
+            onBlur={() => validateField('categoryId', formData.categoryId)}
+            className={`w-full border rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+              fieldErrors.categoryId ? 'border-red-500' : 'border-gray-300'
+            }`}
+            required
+          >
+            <option value="">Select Category</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={String(cat.id)}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+          {fieldErrors.categoryId && (
+            <p className="mt-1 text-sm text-red-600">{fieldErrors.categoryId}</p>
+          )}
+        </div>
 
-              {/* Navigation */}
-              <div className="flex justify-end pt-6 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={goToNextStep}
-                  disabled={!formData.title || !formData.categoryId || !formData.thumbnail}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  Next
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-900 mb-2">
+            Level
+          </label>
+          <select
+            name="level"
+            value={formData.level}
+            onChange={handleInputChange}
+            className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+          >
+            {levelOptions.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-900 mb-2">
+          Status
+        </label>
+        <select
+          name="status"
+          value={formData.status}
+          onChange={handleInputChange}
+          className={`w-full border rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${getStatusColor(formData.status)}`}
+        >
+          {statusOptions.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-900 mb-2">
+          Course Thumbnail (Optional)
+        </label>
+        <div className="flex flex-col sm:flex-row gap-4 items-start">
+          <div className="flex-1">
+            <div
+              onClick={() => thumbnailInputRef.current?.click()}
+              className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-blue-500 transition-colors"
+            >
+              <input
+                type="file"
+                ref={thumbnailInputRef}
+                onChange={handleThumbnailUpload}
+                accept="image/*"
+                className="hidden"
+              />
+              <Upload className="w-12 h-12 mx-auto text-gray-400 mb-2" />
+              <p className="text-gray-600">Click to upload thumbnail</p>
+              <p className="text-sm text-gray-500 mt-1">Recommended: 1280x720px, max 2MB</p>
+            </div>
+          </div>
+
+          {formData.thumbnailPreview && (
+            <div className="relative">
+              <img
+                src={formData.thumbnailPreview}
+                alt="Thumbnail preview"
+                className="w-48 h-32 object-cover rounded-xl"
+              />
+              <button
+                type="button"
+                onClick={removeThumbnail}
+                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           )}
+        </div>
+      </div>
+      
+      {/* Validation requirements summary */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+        <h4 className="font-medium text-blue-800 mb-2">Validation Requirements:</h4>
+        <ul className="text-sm text-blue-700 space-y-1">
+          <li>✓ Title: 3-200 characters (currently: {formData.title.length})</li>
+          <li>✓ Description: 5-5000 characters (currently: {formData.description.length})</li>
+          <li>✓ Category: Required</li>
+          <li>✓ Price: Optional (default 0)</li>
+        </ul>
+      </div>
+    </div>
+  );
 
-          {/* Step 2: Content */}
-          {step === 2 && (
-            <div className="p-8">
-              <div className="mb-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">Course Content</h2>
-                <p className="text-gray-600">Add modules and lessons to your course</p>
+  // Render Step 2: Course Content
+  const renderStep2 = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-900">Course Content</h3>
+        <button
+          type="button"
+          onClick={addModule}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all"
+        >
+          <Plus className="w-4 h-4" />
+          Add Module
+        </button>
+      </div>
+
+      {modules.length === 0 ? (
+        <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-2xl">
+          <Layers className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">No modules yet</h3>
+          <p className="text-gray-600">Add your first module to organize your course content</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {modules.map((module, mIndex) => (
+            <div key={`${module.id}-${module.lastUpdated || ''}`} className="border border-gray-200 rounded-2xl overflow-hidden">
+              <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <span className="text-blue-600 font-semibold text-sm">{mIndex + 1}</span>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder={`Module ${mIndex + 1} Title`}
+                      value={module.title}
+                      onChange={(e) => updateModule(module.id, 'title', e.target.value)}
+                      className="bg-transparent text-lg font-semibold text-gray-900 placeholder-gray-500 focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeModule(module.id)}
+                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
-              {/* Modules */}
-              <div className="space-y-6">
-                {modules.map((module, mIndex) => (
-                  <div key={module.id} className="border border-gray-200 rounded-xl p-6">
-                    <div className="flex items-center justify-between mb-4">
+              <div className="p-6 space-y-4">
+                {module.lessons.map((lesson, lIndex) => (
+                  <div key={`${lesson.id}-${lesson.lastUpdated || ''}`} className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                          <span className="text-blue-600 font-semibold">{mIndex + 1}</span>
+                        <div className="w-6 h-6 bg-white border border-gray-300 rounded-lg flex items-center justify-center">
+                          <span className="text-gray-600 text-xs font-medium">{lIndex + 1}</span>
                         </div>
                         <input
                           type="text"
-                          value={module.title}
-                          onChange={(e) => updateModule(mIndex, 'title', e.target.value)}
-                          placeholder="Module Title"
-                          className="text-lg font-semibold bg-transparent focus:outline-none"
+                          placeholder="Lesson Title"
+                          value={lesson.title}
+                          onChange={(e) => updateLesson(module.id, lesson.id, 'title', e.target.value)}
+                          className="bg-transparent text-gray-900 placeholder-gray-500 focus:outline-none border-b border-transparent focus:border-gray-300 pb-1"
                         />
                       </div>
                       <button
                         type="button"
-                        onClick={() => removeModule(mIndex)}
-                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                        onClick={() => removeLesson(module.id, lesson.id)}
+                        className="p-1 text-red-500 hover:bg-red-50 rounded"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
 
-                    {/* Lessons */}
                     <div className="space-y-3">
-                      {module.lessons.map((lesson, lIndex) => (
-                        <div key={lesson.id} className="bg-gray-50 rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 bg-white border border-gray-300 rounded flex items-center justify-center">
-                                <span className="text-sm">{lIndex + 1}</span>
-                              </div>
-                              <input
-                                type="text"
-                                value={lesson.title}
-                                onChange={(e) => updateLesson(mIndex, lIndex, 'title', e.target.value)}
-                                placeholder="Lesson Title"
-                                className="bg-transparent focus:outline-none"
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeLesson(mIndex, lIndex)}
-                              className="text-red-500 hover:text-red-600"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                          
-                          <div className="grid md:grid-cols-2 gap-3">
-                            <div>
-                              <select
-                                value={lesson.contentType}
-                                onChange={(e) => updateLesson(mIndex, lIndex, 'contentType', e.target.value)}
-                                className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-                              >
-                                <option value="VIDEO">Video</option>
-                                <option value="PDF">PDF</option>
-                                <option value="AUDIO">Audio</option>
-                                <option value="DOC">Document</option>
-                              </select>
-                            </div>
-                            <div>
-                              {lesson.file ? (
-                                <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded px-3 py-2">
-                                  <span className="text-sm text-green-800 truncate">{lesson.file.name}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => updateLesson(mIndex, lIndex, 'file', null)}
-                                    className="text-red-500"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs font-medium text-gray-700 mb-1 block">
+                            Content Type
+                          </label>
+                          <select
+                            value={lesson.contentType}
+                            onChange={(e) => updateLesson(module.id, lesson.id, 'contentType', e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-blue-500"
+                          >
+                            <option value="VIDEO">Video</option>
+                            <option value="AUDIO">Audio</option>
+                            <option value="PDF">PDF</option>
+                            <option value="DOC">Document</option>
+                            <option value="OTHER">Other</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-medium text-gray-700 mb-1 block">
+                            File Upload *
+                          </label>
+                          <div
+                            onClick={() => {
+                              const input = createFileInput(module.id, lesson.id);
+                              input.click();
+                            }}
+                            className="border border-gray-300 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 transition-colors"
+                          >
+                            {lesson.file ? (
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  {getFileIcon(lesson.contentType)}
+                                  <div className="flex flex-col">
+                                    <span className="font-medium text-gray-700 truncate max-w-[150px]">
+                                      {lesson.file?.name || 'Uploaded file'}
+                                    </span>
+                                    <span className="text-xs text-gray-500">
+                                      {lesson.file?.size ? formatFileSize(lesson.file.size) : ''}
+                                    </span>
+                                  </div>
                                 </div>
-                              ) : (
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setCurrentLessonFile({ mIndex, lIndex });
-                                    fileInputRef.current?.click();
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateLesson(module.id, lesson.id, 'file', null);
+                                    updateLesson(module.id, lesson.id, 'contentUrl', '');
+                                    updateLesson(module.id, lesson.id, 'isFileUploaded', false);
                                   }}
-                                  className="w-full border border-dashed border-gray-300 rounded px-3 py-2 text-sm hover:border-blue-500 hover:bg-blue-50"
+                                  className="text-red-500 hover:text-red-700 p-1"
                                 >
-                                  + Add File
+                                  <X className="w-4 h-4" />
                                 </button>
-                              )}
-                            </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 text-gray-500">
+                                <Upload className="w-4 h-4" />
+                                <span>Click to upload file</span>
+                              </div>
+                            )}
                           </div>
                         </div>
-                      ))}
-                      
-                      <button
-                        type="button"
-                        onClick={() => addLesson(mIndex)}
-                        className="flex items-center gap-2 text-blue-600 hover:text-blue-700"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Add Lesson
-                      </button>
+                      </div>
+
+                      {fileErrors[lesson.id] && (
+                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                          <p className="text-xs text-red-600 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            {fileErrors[lesson.id]}
+                          </p>
+                        </div>
+                      )}
+
+                      {lesson.file && (
+                        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                          <p className="text-xs text-green-700 flex items-center gap-1">
+                            <Check className="w-3 h-3" />
+                            File uploaded successfully
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
 
                 <button
                   type="button"
-                  onClick={addModule}
-                  className="w-full border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-blue-500 hover:bg-blue-50 transition-all"
+                  onClick={() => addLesson(module.id)}
+                  className="flex items-center gap-2 text-blue-600 hover:text-blue-800"
                 >
-                  <div className="text-center">
-                    <Plus className="w-6 h-6 text-gray-400 mx-auto mb-2" />
-                    <div className="font-medium text-gray-700">Add Module</div>
-                    <div className="text-sm text-gray-500">Organize your course content</div>
-                  </div>
+                  <Plus className="w-4 h-4" />
+                  Add Lesson
                 </button>
               </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
-              {/* Navigation */}
-              <div className="flex justify-between pt-8 mt-8 border-t border-gray-200">
+  // Render Step 3: Review
+  const renderStep3 = () => (
+    <div className="space-y-6">
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="bg-gray-50 rounded-xl p-6 space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <BookOpen className="w-5 h-5" />
+            Course Summary
+          </h3>
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm text-gray-600">Title</p>
+              <p className="font-medium text-gray-900">{formData.title || 'Not set'}</p>
+              <p className="text-xs text-gray-500">{formData.title.length}/200 characters</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600">Description</p>
+              <p className="font-medium text-gray-900">{formData.description.substring(0, 100)}...</p>
+              <p className="text-xs text-gray-500">{formData.description.length}/5000 characters</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-gray-600">Price</p>
+                <p className="font-medium text-gray-900">${formData.price}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Level</p>
+                <p className="font-medium text-gray-900">
+                  {levelOptions.find(l => l.value === formData.level)?.label}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Status</p>
+                <p className="font-medium text-gray-900">
+                  {statusOptions.find(s => s.value === formData.status)?.label}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Category</p>
+                <p className="font-medium text-gray-900">
+                  {categories.find(c => c.id == formData.categoryId)?.name || 'Not selected'}
+                </p>
+              </div>
+            </div>
+            {formData.thumbnailPreview && (
+              <div>
+                <p className="text-sm text-gray-600 mb-2">Thumbnail</p>
+                <img
+                  src={formData.thumbnailPreview}
+                  alt="Thumbnail"
+                  className="w-32 h-20 object-cover rounded-lg"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-gray-50 rounded-xl p-6 space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <Layers className="w-5 h-5" />
+            Modules ({modules.length})
+          </h3>
+          <div className="space-y-3">
+            {modules.map((module, index) => (
+              <div key={module.id} className="border border-gray-200 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-medium text-gray-800">
+                    {module.title || `Module ${index + 1}`}
+                  </h4>
+                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                    {module.lessons.length} lessons
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {module.lessons.map((lesson, lessonIndex) => (
+                    <div key={lesson.id} className="flex items-center gap-2 text-sm">
+                      {getFileIcon(lesson.contentType)}
+                      <span className="text-gray-700">
+                        {lesson.title || `Lesson ${lessonIndex + 1}`}
+                      </span>
+                      {lesson.file && (
+                        <span className="text-xs text-gray-500 ml-auto">
+                          {lesson.contentType.toLowerCase()}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+          <div>
+            <h4 className="font-medium text-yellow-800">Ready to create your course?</h4>
+            <p className="text-sm text-yellow-700 mt-1">
+              Please review all information carefully. Once submitted, you'll be able to edit the course from your dashboard.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-gray-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if user is instructor
+  if (currentUser?.role !== 'INSTRUCTOR') {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-gray-50 to-blue-50 flex items-center justify-center">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8 text-center">
+          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Access Denied</h2>
+          <p className="text-gray-600 mb-6">
+            Only instructors can create courses. Please log in with an instructor account.
+          </p>
+          <button
+            onClick={() => navigate('/login')}
+            className="w-full px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Main return
+  return (
+    <div className="min-h-screen bg-linear-to-br from-gray-50 to-blue-50">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center">
+              <Link
+                to="/instructor-dashboard"
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                <span>Back to Dashboard</span>
+              </Link>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                {[1, 2, 3].map((step) => (
+                  <React.Fragment key={step}>
+                    <div className={`
+                      w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
+                      ${currentStep >= step 
+                        ? 'bg-blue-600 text-white' 
+                        : 'bg-gray-200 text-gray-400'
+                      }
+                    `}>
+                      {step}
+                    </div>
+                    {step < 3 && (
+                      <div className={`
+                        w-8 h-0.5
+                        ${currentStep > step ? 'bg-blue-600' : 'bg-gray-200'}
+                      `} />
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl font-bold text-gray-900">Create New Course</h1>
+          <p className="text-gray-600 mt-2">
+            {currentStep === 1 && 'Step 1: Basic Information'}
+            {currentStep === 2 && 'Step 2: Course Content'}
+            {currentStep === 3 && 'Step 3: Review & Submit'}
+          </p>
+        </div>
+
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600" />
+            <span className="text-red-700">{error}</span>
+          </div>
+        )}
+
+        {success && (
+          <div className="mb-6 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-green-600" />
+            <span className="text-green-700">{success}</span>
+          </div>
+        )}
+
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8">
+          {currentStep === 1 && renderStep1()}
+          {currentStep === 2 && renderStep2()}
+          {currentStep === 3 && renderStep3()}
+
+          <div className="flex justify-between mt-8 pt-6 border-t border-gray-200">
+            <div>
+              {currentStep > 1 && (
                 <button
                   type="button"
-                  onClick={goToPrevStep}
-                  className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                  onClick={prevStep}
+                  className="flex items-center gap-2 px-6 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors font-medium"
+                  disabled={saving || uploading}
                 >
+                  <ChevronLeft className="w-4 h-4" />
                   Back
                 </button>
+              )}
+            </div>
+            
+            <div className="flex gap-4">
+              {currentStep < 3 ? (
                 <button
                   type="button"
-                  onClick={goToNextStep}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  onClick={nextStep}
+                  className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-medium shadow-sm"
+                  disabled={saving || uploading}
                 >
-                  Review
+                  Next Step
+                  <ChevronRight className="w-4 h-4" />
                 </button>
-              </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={saving || uploading || Object.values(fieldErrors).some(error => error)}
+                  className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {(saving || uploading) ? (
+                    <>
+                      <Loader className="w-5 h-5 animate-spin" />
+                      Creating Course...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-5 h-5" />
+                      Create Course
+                    </>
+                  )}
+                </button>
+              )}
             </div>
-          )}
+          </div>
+        </div>
 
-          {/* Step 3: Review */}
-          {step === 3 && (
-            <div className="p-8">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6">Review Course</h2>
-              
-              <div className="space-y-6">
-                {/* Course Summary */}
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <h3 className="font-semibold text-gray-900 mb-4">Course Information</h3>
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <div>
-                        <div className="text-sm text-gray-600">Title</div>
-                        <div className="font-medium">{formData.title}</div>
-                      </div>
-                      <div>
-                        <div className="text-sm text-gray-600">Category</div>
-                        <div className="font-medium">
-                          {categories.find(c => c.id == formData.categoryId)?.name || 'Not selected'}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-sm text-gray-600">Level</div>
-                        <div className="font-medium">{formData.level}</div>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <div>
-                        <div className="text-sm text-gray-600">Price</div>
-                        <div className="font-medium">
-                          {formData.priceType === 'free' ? 'Free' : `$${formData.price}`}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-sm text-gray-600">Status</div>
-                        <div className="font-medium">{formData.status}</div>
-                      </div>
-                      <div>
-                        <div className="text-sm text-gray-600">Thumbnail</div>
-                        <div className="font-medium">
-                          {formData.thumbnail ? 'Uploaded' : 'Not uploaded'}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Thumbnail Preview */}
-                {thumbnailPreview && (
-                  <div className="bg-gray-50 rounded-xl p-6">
-                    <h3 className="font-semibold text-gray-900 mb-4">Thumbnail Preview</h3>
-                    <div className="max-w-md">
-                      <img 
-                        src={thumbnailPreview} 
-                        alt="Course thumbnail" 
-                        className="w-full h-auto rounded-lg"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Modules Summary */}
-                {modules.length > 0 && (
-                  <div className="bg-gray-50 rounded-xl p-6">
-                    <h3 className="font-semibold text-gray-900 mb-4">Course Content</h3>
-                    <div className="space-y-3">
-                      {modules.map((module, index) => (
-                        <div key={module.id} className="border border-gray-200 rounded-lg p-4">
-                          <div className="font-medium mb-2">
-                            Module {index + 1}: {module.title || 'Untitled'}
-                          </div>
-                          <div className="text-sm text-gray-600">
-                            {module.lessons.length} lesson(s)
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Submit Button */}
-              <div className="mt-8 pt-8 border-t border-gray-200">
-                <div className="flex gap-4">
-                  <button
-                    type="button"
-                    onClick={goToPrevStep}
-                    className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-semibold"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading || !formData.thumbnail}
-                    className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 font-semibold shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader className="w-5 h-5 animate-spin" />
-                        Creating...
-                      </>
-                    ) : (
-                      'Create Course'
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </form>
+        <div className="mt-4 text-xs text-gray-500 p-4 bg-gray-100 rounded-lg">
+          <p className="font-medium mb-1">Debug Info:</p>
+          <p>Total Modules: {modules.length}</p>
+          <p>Total Lessons: {modules.reduce((acc, module) => acc + module.lessons.length, 0)}</p>
+          <p>Files Uploaded: {modules.reduce((acc, module) => 
+            acc + module.lessons.filter(lesson => lesson.file).length, 0
+          )}</p>
+          <p>Current Step: {currentStep}</p>
+          <p className="mt-2">Field Errors: {Object.values(fieldErrors).filter(e => e).length}</p>
+        </div>
       </div>
+
+      {(saving || uploading) && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-8 flex flex-col items-center">
+            <Loader className="w-12 h-12 animate-spin text-blue-600 mb-4" />
+            <p className="text-gray-700">
+              {uploading ? 'Uploading files...' : 'Creating course...'}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

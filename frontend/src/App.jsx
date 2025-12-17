@@ -29,6 +29,7 @@ import EditInstructorProfile from './pages/instructor-dashboard/EditInstructorPr
 import InstructorProfile from './pages/instructor-dashboard/InstructorProfile';
 import PaymentPage from './pages/Courses/PaymentPage';
 import PaymentSuccessPage from './pages/Courses/PaymentSuccessPage';
+import CourseLearningPage from './components/CourseLearningPage';
 
 const App = () => {
   return (
@@ -43,6 +44,7 @@ const App = () => {
           <Route path='/verify-otp' element={<VerifyOTP />} />
           <Route path='/courses' element={<ErrorBoundary><CoursePlayerModal /></ErrorBoundary>} />
           <Route path='/courses/:id' element={<CourseDetail />} />
+          <Route path="/courses/:id/learn" element={<CourseLearningPage />} />
           {/* Protected Create Course Route for Instructors */}
           <Route
             path='/create-course'
