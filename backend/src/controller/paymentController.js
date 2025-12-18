@@ -1,201 +1,222 @@
 import * as paymentService from "../services/paymentService.js";
+import asyncHandler from "../middleware/asyncHandler.js";
 
-// Process payment
-export const processPayment = async (req, res) => {
+/**
+ * @desc    Process payment for a course
+ * @route   POST /api/payments/process
+ * @access  Private (Student)
+ */
+export const processPayment = asyncHandler(async (req, res) => {
+  const { courseId, paymentMethod, paymentDetails } = req.body;
+  const userId = req.user.userId;
+
+  // Validate required fields
+  if (!courseId || !paymentMethod) {
+    return res.status(400).json({
+      success: false,
+      message: "Course ID and payment method are required"
+    });
+  }
+
   try {
-    const userId = req.user.userId;
-    const { courseId, amount, paymentMethod, paymentDetails } = req.body;
-
-    // Validation
-    if (!courseId || !amount || !paymentMethod) {
-      return res.status(400).json({ 
-        success: false,
-        message: "Missing required fields: courseId, amount, paymentMethod" 
-      });
-    }
-
-    // Convert to numbers
-    const numericCourseId = Number(courseId);
-    const numericAmount = Number(amount);
-    
-    if (isNaN(numericCourseId) || isNaN(numericAmount) || numericAmount <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid courseId or amount"
-      });
-    }
-
-    // Process payment and enrollment in a single transaction
-    const result = await paymentService.processPaymentTransaction({
-      userId: Number(userId),
-      courseId: numericCourseId,
-      amount: numericAmount,
+    // Process payment and create enrollment
+    const result = await paymentService.processPaymentAndEnroll({
+      userId,
+      courseId: Number(courseId),
       paymentMethod,
-      paymentDetails
+      paymentDetails: paymentDetails || {}
     });
 
     res.status(200).json({
       success: true,
       message: "Payment successful and enrollment created",
-      payment: result.payment,
-      enrollment: result.enrollment
+      data: result
     });
 
-  } catch (err) {
-    console.error('Payment processing error:', err);
-    
+  } catch (error) {
     // Handle specific errors
-    if (err.message.includes('already enrolled') || err.code === 'P2002') {
+    if (error.message.includes('already enrolled') || error.status === 409) {
       return res.status(409).json({
         success: false,
-        message: "You are already enrolled in this course"
+        message: "You are already enrolled in this course",
+        code: "ALREADY_ENROLLED"
       });
     }
-    
-    if (err.message.includes('Course not found')) {
+
+    if (error.message.includes('Course not found')) {
       return res.status(404).json({
         success: false,
-        message: err.message
+        message: error.message
       });
     }
-    
-    if (err.message.includes('Amount is less')) {
+
+    if (error.message.includes('Course is not published')) {
       return res.status(400).json({
         success: false,
-        message: err.message
+        message: error.message
       });
     }
-    
-    if (err.message.includes('Unsupported payment method')) {
-      return res.status(400).json({
-        success: false,
-        message: err.message
-      });
-    }
-    
-    if (err.message.includes('insufficient funds') || err.message.includes('payment declined')) {
-      return res.status(402).json({
-        success: false,
-        message: err.message
-      });
-    }
-    
-    res.status(500).json({
-      success: false,
-      message: "Payment processing failed",
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-};
 
-// Get user's payment history with pagination
-export const getUserPayments = async (req, res) => {
-  try {
-    const userId = req.user.userId;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    
-    const result = await paymentService.getUserPaymentHistoryPaginated(
-      userId, 
-      page, 
-      limit
-    );
-    
-    res.json({
-      success: true,
-      ...result
-    });
-  } catch (err) {
-    console.error('Get payments error:', err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch payment history"
-    });
-  }
-};
+    if (error.message.includes('Payment already exists')) {
+      return res.status(409).json({
+        success: false,
+        message: error.message,
+        code: "DUPLICATE_PAYMENT"
+      });
+    }
 
-// Verify payment status
-export const verifyPayment = async (req, res) => {
-  try {
-    const { paymentId } = req.params;
-    const payment = await paymentService.verifyPaymentStatus(paymentId);
-    
-    res.json({
-      success: true,
-      payment
-    });
-  } catch (err) {
-    if (err.message.includes('Payment not found')) {
-      return res.status(404).json({
-        success: false,
-        message: err.message
-      });
-    }
-    res.status(500).json({
-      success: false,
-      message: "Failed to verify payment"
-    });
+    // Pass other errors to asyncHandler
+    throw error;
   }
-};
+});
 
-// Get payment analytics (admin only)
-export const getPaymentAnalytics = async (req, res) => {
-  try {
-    const { startDate, endDate } = req.query;
-    
-    const analytics = await paymentService.getPaymentAnalytics(startDate, endDate);
-    
-    res.json({
-      success: true,
-      analytics
-    });
-  } catch (err) {
-    console.error('Analytics error:', err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch payment analytics"
-    });
-  }
-};
+/**
+ * @desc    Get user's payment history
+ * @route   GET /api/payments/history
+ * @access  Private (Student)
+ */
+export const getUserPayments = asyncHandler(async (req, res) => {
+  const userId = req.user.userId;
+  const { page = 1, limit = 10, status } = req.query;
 
-// Refund payment
-export const refundPayment = async (req, res) => {
-  try {
-    const userId = req.user.userId;
-    const { paymentId } = req.params;
-    
-    const refund = await paymentService.processRefund(paymentId, userId);
-    
-    res.json({
-      success: true,
-      message: "Refund initiated successfully",
-      refund
-    });
-  } catch (err) {
-    if (err.message.includes('Payment not found')) {
-      return res.status(404).json({
-        success: false,
-        message: err.message
-      });
-    }
-    
-    if (err.message.includes('Already refunded')) {
-      return res.status(400).json({
-        success: false,
-        message: err.message
-      });
-    }
-    
-    if (err.message.includes('Cannot refund')) {
-      return res.status(400).json({
-        success: false,
-        message: err.message
-      });
-    }
-    
-    res.status(500).json({
+  const result = await paymentService.getUserPayments(
+    userId,
+    parseInt(page),
+    parseInt(limit),
+    status
+  );
+
+  res.json({
+    success: true,
+    ...result
+  });
+});
+
+/**
+ * @desc    Verify payment status
+ * @route   GET /api/payments/verify/:paymentId
+ * @access  Private (Student/Admin)
+ */
+export const verifyPayment = asyncHandler(async (req, res) => {
+  const { paymentId } = req.params;
+  const userId = req.user.userId;
+
+  const payment = await paymentService.verifyPaymentStatus(
+    Number(paymentId),
+    userId
+  );
+
+  res.json({
+    success: true,
+    data: payment
+  });
+});
+
+/**
+ * @desc    Check if user has paid for a course
+ * @route   GET /api/payments/check/:courseId
+ * @access  Private (Student)
+ */
+export const checkCoursePayment = asyncHandler(async (req, res) => {
+  const { courseId } = req.params;
+  const userId = req.user.userId;
+
+  const paymentExists = await paymentService.checkPaymentExists(
+    userId,
+    Number(courseId)
+  );
+
+  res.json({
+    success: true,
+    hasPaid: paymentExists,
+    data: paymentExists || null
+  });
+});
+
+/**
+ * @desc    Create payment intent (for card payments)
+ * @route   POST /api/payments/create-intent
+ * @access  Private (Student)
+ */
+export const createPaymentIntent = asyncHandler(async (req, res) => {
+  const { courseId, amount } = req.body;
+  const userId = req.user.userId;
+
+  if (!courseId || !amount) {
+    return res.status(400).json({
       success: false,
-      message: "Refund processing failed"
+      message: "Course ID and amount are required"
     });
   }
-};
+
+  const intent = await paymentService.createPaymentIntent({
+    userId,
+    courseId: Number(courseId),
+    amount: parseFloat(amount)
+  });
+
+  res.json({
+    success: true,
+    data: intent
+  });
+});
+
+/**
+ * @desc    Handle payment callback (for eSewa/Khalti)
+ * @route   POST /api/payments/callback/:gateway
+ * @access  Public
+ */
+export const handlePaymentCallback = asyncHandler(async (req, res) => {
+  const { gateway } = req.params;
+  const callbackData = req.body;
+
+  const result = await paymentService.handleGatewayCallback(
+    gateway.toUpperCase(),
+    callbackData
+  );
+
+  res.json({
+    success: true,
+    data: result
+  });
+});
+
+/**
+ * @desc    Get payment analytics (admin only)
+ * @route   GET /api/payments/analytics
+ * @access  Private (Admin)
+ */
+export const getPaymentAnalytics = asyncHandler(async (req, res) => {
+  const { startDate, endDate } = req.query;
+
+  const analytics = await paymentService.getPaymentAnalytics(
+    startDate,
+    endDate
+  );
+
+  res.json({
+    success: true,
+    data: analytics
+  });
+});
+
+/**
+ * @desc    Refund payment
+ * @route   POST /api/payments/:paymentId/refund
+ * @access  Private (Admin)
+ */
+export const refundPayment = asyncHandler(async (req, res) => {
+  const { paymentId } = req.params;
+  const { reason } = req.body;
+
+  const refund = await paymentService.processRefund(
+    Number(paymentId),
+    reason || "Requested by user"
+  );
+
+  res.json({
+    success: true,
+    message: "Refund initiated successfully",
+    data: refund
+  });
+});

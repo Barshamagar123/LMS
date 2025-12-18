@@ -1,74 +1,106 @@
 import prisma from "../config/prisma.js";
 
-// Main payment processing with transaction
-export const processPaymentTransaction = async ({ userId, courseId, amount, paymentMethod, paymentDetails }) => {
+/**
+ * Process payment and create enrollment in a single transaction
+ * Prevents duplicate payments and enrollments
+ */
+export const processPaymentAndEnroll = async ({ userId, courseId, paymentMethod, paymentDetails }) => {
   return await prisma.$transaction(async (tx) => {
-    // 1. Check enrollment INSIDE transaction (prevents race conditions)
-    const existingEnrollment = await tx.enrollment.findFirst({
-      where: {
-        userId: userId,
-        courseId: courseId
-      }
-    });
-
-    if (existingEnrollment) {
-      throw new Error('User is already enrolled in this course');
-    }
-
-    // 2. Get course with price
+    // 1. Check if course exists and is published
     const course = await tx.course.findUnique({
-      where: { id: courseId },
-      select: {
-        id: true,
-        title: true,
-        price: true,
-        instructorId: true
+      where: {
+        id: courseId,
+        status: "PUBLISHED"
+      },
+      include: {
+        modules: {
+          include: {
+            lessons: true
+          }
+        }
       }
     });
 
     if (!course) {
-      throw new Error('Course not found');
+      const error = new Error("Course not found or not published");
+      error.status = 404;
+      throw error;
     }
 
-    // 3. Validate amount
-    const coursePrice = parseFloat(course.price);
-    const requestedAmount = parseFloat(amount);
-    
-    if (requestedAmount < coursePrice) {
-      throw new Error(`Amount is less than course price. Required: ${coursePrice}`);
+    // 2. Check if user is already enrolled
+    const existingEnrollment = await tx.enrollment.findUnique({
+      where: {
+        userId_courseId: {
+          userId: userId,
+          courseId: courseId
+        }
+      }
+    });
+
+    if (existingEnrollment) {
+      const error = new Error("User is already enrolled in this course");
+      error.status = 409;
+      throw error;
     }
 
-    // 4. Generate unique transaction ID
-    const transactionId = generateTransactionId(paymentMethod);
-    
-    // 5. Create payment record
+    // 3. Check for existing successful payment for this course by same user
+    const existingPayment = await tx.payment.findFirst({
+      where: {
+        userId: userId,
+        courseId: courseId,
+        status: "SUCCESS"
+      }
+    });
+
+    if (existingPayment) {
+      const error = new Error("Payment already exists for this course");
+      error.status = 409;
+      error.code = "DUPLICATE_PAYMENT";
+      throw error;
+    }
+
+    // 4. Create payment record
     const payment = await tx.payment.create({
       data: {
         userId: userId,
         courseId: courseId,
-        amount: requestedAmount,
+        amount: course.price,
+        status: "SUCCESS",
         paymentMethod: paymentMethod.toUpperCase(),
-        status: 'SUCCESS',
-        transactionId: transactionId,
-        gatewayResponse: JSON.stringify({
-          transactionId: transactionId,
-          gateway: paymentMethod.toUpperCase(),
-          status: 'approved',
-          timestamp: new Date().toISOString()
-        }),
-        paymentDetails: JSON.stringify(paymentDetails || {})
+        paymentDetails: JSON.stringify(paymentDetails)
       }
     });
 
-    // 6. Create enrollment immediately (atomic operation)
+    // 5. Create enrollment
     const enrollment = await tx.enrollment.create({
       data: {
         userId: userId,
         courseId: courseId,
-        paymentId: payment.id,
         progress: 0,
-        completed: false
-      },
+        status: "IN_PROGRESS"
+      }
+    });
+
+    // 6. Create LessonProgress records for all lessons
+    const lessons = course.modules.flatMap(module => module.lessons);
+    
+    if (lessons.length > 0) {
+      await Promise.all(
+        lessons.map(lesson =>
+          tx.lessonProgress.create({
+            data: {
+              enrollmentId: enrollment.id,
+              lessonId: lesson.id,
+              completed: false
+            }
+          })
+        )
+      );
+    }
+
+    // 7. Get full details for response
+    const fullEnrollment = await tx.enrollment.findUnique({
+      where: { id: enrollment.id },
       include: {
         course: {
           select: {
@@ -86,60 +118,39 @@ export const processPaymentTransaction = async ({ userId, courseId, amount, paym
       }
     });
 
-    // 7. Update course enrollment count
-    await tx.course.update({
-      where: { id: courseId },
-      data: {
-        enrolledCount: {
-          increment: 1
-        }
-      }
-    });
-
     return {
       payment: {
         id: payment.id,
-        transactionId: payment.transactionId,
         amount: payment.amount,
-        paymentMethod: payment.paymentMethod,
         status: payment.status,
-        createdAt: payment.createdAt,
-        gatewayResponse: JSON.parse(payment.gatewayResponse)
+        paymentMethod: payment.paymentMethod,
+        createdAt: payment.createdAt
       },
-      enrollment: {
-        id: enrollment.id,
-        course: enrollment.course,
-        progress: enrollment.progress,
-        enrolledAt: enrollment.createdAt
-      }
+      enrollment: fullEnrollment
     };
   }, {
-    maxWait: 5000, // Maximum time to wait for a transaction
-    timeout: 10000 // Maximum time for the transaction to complete
+    maxWait: 5000,
+    timeout: 10000
   });
 };
 
-// Generate unique transaction ID
-const generateTransactionId = (paymentMethod) => {
-  const timestamp = Date.now();
-  const random = Math.floor(Math.random() * 1000000);
-  const prefix = paymentMethod.toUpperCase() === 'COD' ? 'COD' : 
-                paymentMethod.toUpperCase() === 'ESEWA' ? 'ESW' :
-                paymentMethod.toUpperCase() === 'KHALTI' ? 'KHL' : 'TXN';
-  
-  return `${prefix}-${timestamp}-${random}`;
-};
-
-// Get user payment history with pagination
-export const getUserPaymentHistoryPaginated = async (userId, page = 1, limit = 10) => {
+/**
+ * Get user payments with pagination
+ */
+export const getUserPayments = async (userId, page = 1, limit = 10, status = null) => {
   const skip = (page - 1) * limit;
   
+  const whereClause = {
+    userId: Number(userId)
+  };
+  
+  if (status) {
+    whereClause.status = status;
+  }
+
   const [payments, total] = await Promise.all([
     prisma.payment.findMany({
-      where: {
-        userId: Number(userId),
-        status: 'SUCCESS'
-      },
+      where: whereClause,
       include: {
         course: {
           select: {
@@ -152,7 +163,7 @@ export const getUserPaymentHistoryPaginated = async (userId, page = 1, limit = 1
           select: {
             id: true,
             progress: true,
-            completed: true
+            status: true
           }
         }
       },
@@ -163,21 +174,17 @@ export const getUserPaymentHistoryPaginated = async (userId, page = 1, limit = 1
       take: limit
     }),
     prisma.payment.count({
-      where: {
-        userId: Number(userId),
-        status: 'SUCCESS'
-      }
+      where: whereClause
     })
   ]);
 
   return {
     payments: payments.map(payment => ({
       id: payment.id,
-      transactionId: payment.transactionId,
       amount: payment.amount,
-      paymentMethod: payment.paymentMethod,
       status: payment.status,
-      date: payment.createdAt,
+      paymentMethod: payment.paymentMethod,
+      createdAt: payment.createdAt,
       course: payment.course,
       enrollment: payment.enrollment
     })),
@@ -192,10 +199,15 @@ export const getUserPaymentHistoryPaginated = async (userId, page = 1, limit = 1
   };
 };
 
-// Verify payment status
-export const verifyPaymentStatus = async (paymentId) => {
-  const payment = await prisma.payment.findUnique({
-    where: { id: Number(paymentId) },
+/**
+ * Verify payment status
+ */
+export const verifyPaymentStatus = async (paymentId, userId) => {
+  const payment = await prisma.payment.findFirst({
+    where: {
+      id: Number(paymentId),
+      userId: Number(userId)
+    },
     include: {
       course: {
         select: {
@@ -204,45 +216,98 @@ export const verifyPaymentStatus = async (paymentId) => {
           price: true
         }
       },
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true
-        }
-      },
       enrollment: {
         select: {
           id: true,
           progress: true,
-          completed: true
+          status: true
         }
       }
     }
   });
 
   if (!payment) {
-    throw new Error('Payment not found');
+    const error = new Error("Payment not found");
+    error.status = 404;
+    throw error;
   }
 
   return {
     id: payment.id,
-    transactionId: payment.transactionId,
     amount: payment.amount,
-    paymentMethod: payment.paymentMethod,
     status: payment.status,
+    paymentMethod: payment.paymentMethod,
     createdAt: payment.createdAt,
     course: payment.course,
-    user: payment.user,
     enrollment: payment.enrollment,
-    gatewayResponse: JSON.parse(payment.gatewayResponse || '{}')
+    paymentDetails: JSON.parse(payment.paymentDetails || '{}')
   };
 };
 
-// Get payment analytics
+/**
+ * Check if payment exists for a course
+ */
+export const checkPaymentExists = async (userId, courseId) => {
+  const payment = await prisma.payment.findFirst({
+    where: {
+      userId: Number(userId),
+      courseId: Number(courseId),
+      status: "SUCCESS"
+    },
+    select: {
+      id: true,
+      amount: true,
+      status: true,
+      createdAt: true
+    }
+  });
+
+  return payment;
+};
+
+/**
+ * Handle payment gateway callbacks
+ */
+export const handleGatewayCallback = async (gateway, callbackData) => {
+  return await prisma.$transaction(async (tx) => {
+    // Extract necessary data from callback
+    const { transactionId, amount, courseId, userId, status } = callbackData;
+    
+    if (status !== "COMPLETED") {
+      throw new Error(`Payment ${status.toLowerCase()}`);
+    }
+
+    // Check for existing payment with same transaction ID
+    const existingPayment = await tx.payment.findFirst({
+      where: {
+        paymentDetails: {
+          contains: transactionId
+        }
+      }
+    });
+
+    if (existingPayment) {
+      throw new Error("Duplicate transaction");
+    }
+
+    // Process payment
+    const result = await processPaymentAndEnroll({
+      userId: parseInt(userId),
+      courseId: parseInt(courseId),
+      paymentMethod: gateway,
+      paymentDetails: callbackData
+    });
+
+    return result;
+  });
+};
+
+/**
+ * Get payment analytics
+ */
 export const getPaymentAnalytics = async (startDate, endDate) => {
   const whereClause = {
-    status: 'SUCCESS'
+    status: "SUCCESS"
   };
 
   if (startDate && endDate) {
@@ -257,67 +322,59 @@ export const getPaymentAnalytics = async (startDate, endDate) => {
     totalPayments,
     revenueByMethod,
     recentPayments,
-    dailyRevenue
+    topCourses
   ] = await Promise.all([
-    // Total revenue
     prisma.payment.aggregate({
       where: whereClause,
-      _sum: {
-        amount: true
-      }
+      _sum: { amount: true }
     }),
-    
-    // Total payments count
     prisma.payment.count({
       where: whereClause
     }),
-    
-    // Revenue by payment method
     prisma.payment.groupBy({
       by: ['paymentMethod'],
       where: whereClause,
-      _sum: {
-        amount: true
-      },
-      _count: {
-        id: true
-      }
+      _sum: { amount: true },
+      _count: { id: true }
     }),
-    
-    // Recent payments
     prisma.payment.findMany({
       where: whereClause,
       include: {
         course: {
-          select: {
-            title: true
-          }
+          select: { title: true }
         },
         user: {
+          select: { name: true, email: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10
+    }),
+    prisma.course.findMany({
+      where: {
+        price: { gt: 0 },
+        enrollments: { some: {} }
+      },
+      include: {
+        _count: {
           select: {
-            name: true,
-            email: true
+            enrollments: true,
+            payments: {
+              where: { status: "SUCCESS" }
+            }
           }
+        },
+        instructor: {
+          select: { name: true }
         }
       },
       orderBy: {
-        createdAt: 'desc'
+        payments: {
+          _count: 'desc'
+        }
       },
       take: 10
-    }),
-    
-    // Daily revenue for last 7 days
-    prisma.$queryRaw`
-      SELECT 
-        DATE(createdAt) as date,
-        COUNT(*) as paymentCount,
-        SUM(amount) as totalAmount
-      FROM Payment
-      WHERE status = 'SUCCESS'
-        AND createdAt >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-      GROUP BY DATE(createdAt)
-      ORDER BY date DESC
-    `
+    })
   ]);
 
   return {
@@ -333,19 +390,27 @@ export const getPaymentAnalytics = async (startDate, endDate) => {
     })),
     recentPayments: recentPayments.map(payment => ({
       id: payment.id,
-      transactionId: payment.transactionId,
       amount: payment.amount,
       method: payment.paymentMethod,
       date: payment.createdAt,
       course: payment.course.title,
       user: payment.user.name
     })),
-    dailyRevenue
+    topCourses: topCourses.map(course => ({
+      id: course.id,
+      title: course.title,
+      instructor: course.instructor.name,
+      price: course.price,
+      enrollments: course._count.enrollments,
+      successfulPayments: course._count.payments
+    }))
   };
 };
 
-// Process refund
-export const processRefund = async (paymentId, userId) => {
+/**
+ * Process refund
+ */
+export const processRefund = async (paymentId, reason) => {
   return await prisma.$transaction(async (tx) => {
     const payment = await tx.payment.findUnique({
       where: { id: Number(paymentId) },
@@ -355,89 +420,40 @@ export const processRefund = async (paymentId, userId) => {
     });
 
     if (!payment) {
-      throw new Error('Payment not found');
+      throw new Error("Payment not found");
     }
 
-    // Verify user owns this payment
-    if (payment.userId !== Number(userId)) {
-      throw new Error('Unauthorized to refund this payment');
+    if (payment.status === "REFUNDED") {
+      throw new Error("Payment already refunded");
     }
 
-    // Check if already refunded
-    if (payment.status === 'REFUNDED') {
-      throw new Error('Payment already refunded');
-    }
-
-    // Check if payment can be refunded (within 7 days)
-    const paymentDate = new Date(payment.createdAt);
-    const now = new Date();
-    const daysDiff = (now - paymentDate) / (1000 * 60 * 60 * 24);
-    
-    if (daysDiff > 7) {
-      throw new Error('Cannot refund payment after 7 days');
-    }
-
-    // Update payment status
+    // Update payment status to REFUNDED
     const updatedPayment = await tx.payment.update({
       where: { id: Number(paymentId) },
       data: {
-        status: 'REFUNDED',
-        refundedAt: new Date(),
-        gatewayResponse: JSON.stringify({
-          ...JSON.parse(payment.gatewayResponse || '{}'),
-          refundStatus: 'processed',
-          refundedAt: new Date().toISOString()
-        })
+        status: "REFUNDED"
       }
     });
 
     // Remove enrollment if exists
     if (payment.enrollment) {
-      await tx.enrollment.delete({
-        where: { id: payment.enrollment.id }
+      // First delete lesson progress records
+      await tx.lessonProgress.deleteMany({
+        where: { enrollmentId: payment.enrollment.id }
       });
 
-      // Decrement course enrollment count
-      await tx.course.update({
-        where: { id: payment.courseId },
-        data: {
-          enrolledCount: {
-            decrement: 1
-          }
-        }
+      // Then delete enrollment
+      await tx.enrollment.delete({
+        where: { id: payment.enrollment.id }
       });
     }
 
     return {
       id: updatedPayment.id,
-      transactionId: updatedPayment.transactionId,
       amount: updatedPayment.amount,
       status: updatedPayment.status,
-      refundedAt: updatedPayment.refundedAt
+      refundedAt: new Date(),
+      reason: reason
     };
   });
-};
-
-// Check if user is already enrolled (kept for backward compatibility)
-export const checkEnrollment = async (userId, courseId) => {
-  const enrollment = await prisma.enrollment.findFirst({
-    where: {
-      userId: Number(userId),
-      courseId: Number(courseId)
-    }
-  });
-
-  return enrollment;
-};
-
-// Create payment (kept for backward compatibility)
-export const createPayment = async (paymentData) => {
-  // This is now deprecated - use processPaymentTransaction instead
-  throw new Error('Use processPaymentTransaction instead for atomic operations');
-};
-
-// Create enrollment (kept for backward compatibility)
-export const createEnrollment = async (userId, courseId, paymentId) => {
-  // This is now deprecated
-  throw new Error('Use processPaymentTransaction instead for atomic operations');
 };
