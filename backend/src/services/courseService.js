@@ -1,26 +1,90 @@
 import prisma from "../config/prisma.js";
+
 /**
  * Create course (instructor only) - UPDATED with thumbnail
  */
-export const createCourse = async ({ title, description, price = 0, categoryId, instructorId, thumbnail = null }) => {
-  const course = await prisma.course.create({
-    data: {
-      title,
-      description,
-      price: Number(price),
-      thumbnail, // ← ADD THIS
-      categoryId,
-      instructorId,
-      status: "DRAFT",
-    },
-  });
-  return course;
+export const createCourse = async ({ title, description, price = 0, categoryId, instructorId, thumbnail = null, modules = [] }) => {
+  // If modules are provided, create them with lessons
+  if (modules && modules.length > 0) {
+    const course = await prisma.course.create({
+      data: {
+        title,
+        description,
+        price: Number(price),
+        thumbnail,
+        categoryId,
+        instructorId,
+        status: "DRAFT",
+        modules: {
+          create: modules.map((module, moduleIndex) => ({
+            title: module.title || `Module ${moduleIndex + 1}`,
+            order: module.order || moduleIndex + 1,
+            lessons: module.lessons ? {
+              create: module.lessons.map((lesson, lessonIndex) => ({
+                title: lesson.title || `Lesson ${lessonIndex + 1}`,
+                contentType: lesson.contentType || 'VIDEO',
+                contentUrl: lesson.contentUrl || '',
+                order: lesson.order || lessonIndex + 1
+              }))
+            } : undefined
+          }))
+        }
+      },
+      include: {
+        modules: {
+          include: {
+            lessons: true
+          }
+        },
+        category: true,
+        instructor: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+    return course;
+  } else {
+    // Create course without modules
+    const course = await prisma.course.create({
+      data: {
+        title,
+        description,
+        price: Number(price),
+        thumbnail,
+        categoryId,
+        instructorId,
+        status: "DRAFT",
+      },
+      include: {
+        category: true,
+        instructor: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+    return course;
+  }
 };
 
 export const updateCourse = async (courseId, updates) => {
   const course = await prisma.course.update({
     where: { id: Number(courseId) },
     data: updates,
+    include: {
+      modules: {
+        include: {
+          lessons: true
+        }
+      }
+    }
   });
   return course;
 };
@@ -31,7 +95,7 @@ export const deleteCourse = async (courseId) => {
 };
 
 /**
- * Public listing with filters - UPDATED to include thumbnail
+ * Public listing with filters - FIXED to include ALL lessons
  */
 export const getCourses = async (filters) => {
   const { category, price = "all", rating_min, q, page = 1, per_page = 12 } = filters;
@@ -55,28 +119,45 @@ export const getCourses = async (filters) => {
     skip: (page - 1) * per_page,
     take: Number(per_page),
     orderBy: { createdAt: "desc" },
-    select: { // Use SELECT instead of INCLUDE for better control
+    select: {
       id: true,
       title: true,
       description: true,
       price: true,
-      thumbnail: true, // ← ADD THIS
+      thumbnail: true,
       rating: true,
       status: true,
+      level: true,
       createdAt: true,
-      instructor: { select: { id: true, name: true } },
+      instructor: { select: { id: true, name: true, email: true } },
       enrollments: { select: { id: true } },
       category: true,
+      // FIXED: Include ALL lessons for ALL modules
       modules: {
         include: {
           lessons: {
-            where: { contentType: 'VIDEO' },
-            orderBy: { order: 'asc' },
-            take: 1
+            orderBy: { order: "asc" },
+            select: {
+              id: true,
+              title: true,
+              contentType: true,
+              order: true,
+              contentUrl: true,
+              duration: true  // Add if you have duration field
+            }
+          },
+          _count: {
+            select: { lessons: true }
           }
         },
-        orderBy: { order: 'asc' }
+        orderBy: { order: "asc" }
       },
+      _count: {
+        select: {
+          enrollments: true,
+          reviews: true
+        }
+      }
     },
   });
 
@@ -85,50 +166,127 @@ export const getCourses = async (filters) => {
     title: c.title,
     description: c.description,
     price: c.price,
-    thumbnail: c.thumbnail, // ← ADD THIS
+    thumbnail: c.thumbnail,
     rating: c.rating,
+    level: c.level,
     instructor: c.instructor,
-    enrollmentsCount: c.enrollments.length,
+    enrollmentsCount: c._count.enrollments,
+    reviewsCount: c._count.reviews,
     category: c.category,
     status: c.status,
     createdAt: c.createdAt,
-    modules: c.modules
+    // Process modules to include lesson count
+    modules: c.modules.map(module => ({
+      id: module.id,
+      title: module.title,
+      order: module.order,
+      courseId: module.courseId,
+      lessons: module.lessons,  // All lessons included
+      lessonsCount: module._count.lessons,
+      // Calculate total duration for this module
+      totalDuration: module.lessons.reduce((sum, lesson) => sum + (lesson.duration || 0), 0)
+    })),
+    // Calculate total course stats
+    totalLessons: c.modules.reduce((sum, module) => sum + module._count.lessons, 0),
+    totalDuration: c.modules.reduce((sum, module) => 
+      sum + module.lessons.reduce((lessonSum, lesson) => lessonSum + (lesson.duration || 0), 0), 0
+    )
   }));
 
-  return { data: mapped, meta: { total, page: Number(page), per_page: Number(per_page) } };
+  return { 
+    data: mapped, 
+    meta: { 
+      total, 
+      page: Number(page), 
+      per_page: Number(per_page),
+      total_pages: Math.ceil(total / Number(per_page))
+    } 
+  };
 };
 
 /**
- * Single course details + recommendations - UPDATED to include thumbnail
+ * Single course details + recommendations - Already correct
  */
 export const getCourseDetails = async (courseId) => {
   const course = await prisma.course.findUnique({
     where: { id: Number(courseId) },
-    select: { // Use SELECT for better control
+    select: {
       id: true,
       title: true,
       description: true,
       price: true,
-      thumbnail: true, // ← ADD THIS
+      thumbnail: true,
       rating: true,
       status: true,
+      level: true,
       instructorId: true,
-      instructor: { select: { id: true, name: true } },
-      modules: { include: { lessons: true } },
-      enrollments: { select: { userId: true, progress: true } },
-      reviews: true,
-      category: true
+      instructor: { 
+        select: { 
+          id: true, 
+          name: true,
+          email: true,
+          bio: true 
+        } 
+      },
+      modules: { 
+        include: { 
+          lessons: {
+            orderBy: { order: 'asc' }
+          } 
+        },
+        orderBy: { order: 'asc' }
+      },
+      enrollments: { 
+        select: { 
+          userId: true, 
+          progress: true 
+        } 
+      },
+      reviews: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      },
+      category: true,
+      _count: {
+        select: {
+          enrollments: true,
+          reviews: true
+        }
+      }
     },
   });
+
+  // Add calculated fields
+  if (course) {
+    course.totalLessons = course.modules.reduce((sum, module) => 
+      sum + module.lessons.length, 0
+    );
+    
+    course.totalDuration = course.modules.reduce((sum, module) => 
+      sum + module.lessons.reduce((lessonSum, lesson) => 
+        lessonSum + (lesson.duration || 0), 0
+      ), 0
+    );
+  }
+
   return course;
 };
 
 /**
- * Recommend courses - UPDATED to include thumbnail
+ * Recommend courses - Updated to include more details
  */
 export const recommendCourses = async (limit = 4, excludeCourseId = null) => {
   const where = { status: "PUBLISHED" };
   if (excludeCourseId) where.id = { not: excludeCourseId };
+  
   const recs = await prisma.course.findMany({
     where,
     take: limit,
@@ -138,51 +296,84 @@ export const recommendCourses = async (limit = 4, excludeCourseId = null) => {
       title: true, 
       price: true, 
       rating: true,
-      thumbnail: true // ← ADD THIS
+      thumbnail: true,
+      instructor: {
+        select: {
+          id: true,
+          name: true
+        }
+      },
+      _count: {
+        select: {
+          enrollments: true
+        }
+      }
     }
   });
+  
   return recs;
 };
 
 /**
- * Instructor-specific: get courses for instructor with stats - UPDATED
+ * Instructor-specific: get courses for instructor with stats
  */
 export const getInstructorCourses = async (instructorId) => {
   const courses = await prisma.course.findMany({
     where: { instructorId: Number(instructorId) },
-    select: { // Use SELECT
+    select: {
       id: true,
       title: true,
       description: true,
-      thumbnail: true, // ← ADD THIS
+      thumbnail: true,
       price: true,
       rating: true,
       status: true,
+      level: true,
       createdAt: true,
       updatedAt: true,
       categoryId: true,
       category: true,
-      enrollments: { select: { id: true } }
-    }
+      modules: {
+        include: {
+          _count: {
+            select: { lessons: true }
+          }
+        }
+      },
+      enrollments: { select: { id: true } },
+      _count: {
+        select: {
+          enrollments: true,
+          reviews: true
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' }
   });
 
   const mapped = await Promise.all(courses.map(async (c) => {
-    const enrollmentsCount = c.enrollments.length;
     const revenueAgg = await prisma.payment.aggregate({
       where: { courseId: c.id, status: "SUCCESS" },
       _sum: { amount: true }
     });
     
+    const totalLessons = c.modules.reduce((sum, module) => 
+      sum + module._count.lessons, 0
+    );
+    
     return {
       id: c.id,
       title: c.title,
       description: c.description,
-      thumbnail: c.thumbnail, // ← ADD THIS
+      thumbnail: c.thumbnail,
       status: c.status,
-      enrollmentsCount,
+      level: c.level,
+      enrollmentsCount: c._count.enrollments,
+      reviewsCount: c._count.reviews,
       revenue: revenueAgg._sum.amount || 0,
       price: c.price,
       rating: c.rating || 0,
+      totalLessons,
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
       categoryId: c.categoryId,
@@ -193,25 +384,52 @@ export const getInstructorCourses = async (instructorId) => {
   return mapped;
 };
 
-// The rest of your functions remain the same...
 export const getInstructorStats = async (instructorId) => {
-  const courses = await prisma.course.findMany({ where: { instructorId: Number(instructorId) } });
+  const courses = await prisma.course.findMany({ 
+    where: { instructorId: Number(instructorId) },
+    include: {
+      modules: {
+        include: {
+          _count: {
+            select: { lessons: true }
+          }
+        }
+      }
+    }
+  });
+  
   const courseIds = courses.map(c => c.id);
 
-  const totalStudents = await prisma.enrollment.count({ where: { courseId: { in: courseIds } } });
+  const totalStudents = await prisma.enrollment.count({ 
+    where: { courseId: { in: courseIds } } 
+  });
+  
   const revenueAgg = await prisma.payment.aggregate({
     where: { courseId: { in: courseIds }, status: "SUCCESS" },
     _sum: { amount: true }
   });
+  
   const avgRatingAgg = await prisma.course.aggregate({
     where: { id: { in: courseIds } },
     _avg: { rating: true }
   });
 
+  const totalLessons = courses.reduce((sum, course) => {
+    const moduleLessons = course.modules.reduce((mSum, module) => 
+      mSum + module._count.lessons, 0
+    );
+    return sum + moduleLessons;
+  }, 0);
+
   return {
+    totalCourses: courses.length,
     totalStudents,
+    totalLessons,
     totalRevenue: revenueAgg._sum.amount || 0,
-    averageRating: Number((avgRatingAgg._avg.rating || 0).toFixed(2))
+    averageRating: Number((avgRatingAgg._avg.rating || 0).toFixed(2)),
+    publishedCourses: courses.filter(c => c.status === 'PUBLISHED').length,
+    draftCourses: courses.filter(c => c.status === 'DRAFT').length,
+    pendingCourses: courses.filter(c => c.status === 'PENDING_APPROVAL').length
   };
 };
 
@@ -223,13 +441,33 @@ export const getCourseStudentProgress = async (courseId, instructorId) => {
 
   const enrollments = await prisma.enrollment.findMany({
     where: { courseId: Number(courseId) },
-    include: { user: true }
+    include: { 
+      user: true,
+      course: {
+        select: {
+          modules: {
+            include: {
+              _count: {
+                select: { lessons: true }
+              }
+            }
+          }
+        }
+      }
+    }
   });
+
+  const totalLessons = enrollments[0]?.course?.modules?.reduce((sum, module) => 
+    sum + module._count.lessons, 0
+  ) || 0;
 
   return enrollments.map(e => ({
     studentId: e.user.id,
     studentName: e.user.name,
+    studentEmail: e.user.email,
     progress: e.progress,
+    completedLessons: Math.floor((e.progress / 100) * totalLessons),
+    totalLessons: totalLessons,
     lastActive: e.updatedAt
   }));
 };
@@ -240,7 +478,7 @@ export const getInstructorRecentActivity = async (instructorId, limit = 10) => {
     select: { 
       id: true, 
       title: true,
-      thumbnail: true // ← ADD THIS
+      thumbnail: true
     } 
   });
   const courseIds = courses.map(c => c.id);
@@ -253,7 +491,7 @@ export const getInstructorRecentActivity = async (instructorId, limit = 10) => {
         select: {
           id: true,
           title: true,
-          thumbnail: true // ← ADD THIS
+          thumbnail: true
         }
       } 
     },
@@ -264,8 +502,11 @@ export const getInstructorRecentActivity = async (instructorId, limit = 10) => {
   return enrollments.map(e => ({
     type: 'enrollment',
     student: e.user.name,
+    studentId: e.user.id,
     course: e.course.title,
-    courseThumbnail: e.course.thumbnail, // ← ADD THIS
-    time: e.updatedAt
+    courseId: e.course.id,
+    courseThumbnail: e.course.thumbnail,
+    time: e.updatedAt,
+    progress: e.progress || 0
   }));
 };

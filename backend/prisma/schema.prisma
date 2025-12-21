@@ -85,6 +85,7 @@ model Course {
   status        CourseStatus @default(DRAFT) // Draft, Pending Approval, Published
   rating        Float?    @default(0)
   categoryId    Int
+  // Duration in minutes
   thumbnail     String?
     level            String?   @default("ALL_LEVELS") // ADD THIS
   createdAt     DateTime  @default(now())
@@ -132,6 +133,7 @@ model Lesson {
   title        String
   contentUrl   String      // File path or cloud URL
   contentType  ContentType
+   duration     Int?        @default(0)
   order        Int
   moduleId     Int
   module       Module      @relation(fields: [moduleId], references: [id])
@@ -157,6 +159,9 @@ model Enrollment {
   user      User     @relation(fields: [userId], references: [id])
   course    Course   @relation(fields: [courseId], references: [id])
   lessonProgress LessonProgress[]
+  payment   Payment? // One enrollment can have one payment
+
+  @@unique([userId, courseId])
 }
 
 enum EnrollmentStatus {
@@ -168,19 +173,24 @@ model Payment {
   id            Int      @id @default(autoincrement())
   userId        Int
   courseId      Int
+  enrollmentId  Int?     @unique // Optional foreign key to enrollment (unique for one-to-one)
   amount        Float
   status        PaymentStatus @default(PENDING)
   paymentMethod String?
+  paymentDetails String? // JSON string containing payment gateway details
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   user          User     @relation(fields: [userId], references: [id])
   course        Course   @relation(fields: [courseId], references: [id])
+  enrollment    Enrollment? @relation(fields: [enrollmentId], references: [id])
 }
 
 enum PaymentStatus {
   PENDING
   SUCCESS
   FAILED
+  REFUNDED
 }
 
 model Assignment {

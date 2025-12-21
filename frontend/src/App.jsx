@@ -30,6 +30,8 @@ import InstructorProfile from './pages/instructor-dashboard/InstructorProfile';
 import PaymentPage from './pages/Courses/PaymentPage';
 import PaymentSuccessPage from './pages/Courses/PaymentSuccessPage';
 import CourseLearningPage from './components/CourseLearningPage';
+// import CategoryDisplay from './components/CategoryDisplay';
+// import InstructorList from './components/InstructorList';
 
 const App = () => {
   return (
@@ -45,6 +47,8 @@ const App = () => {
           <Route path='/courses' element={<ErrorBoundary><CoursePlayerModal /></ErrorBoundary>} />
           <Route path='/courses/:id' element={<CourseDetail />} />
           <Route path="/courses/:id/learn" element={<CourseLearningPage />} />
+          {/* <Route path="/categories" element={<CategoryDisplay />} /> */}
+          {/* <Route path="/instructors" element={<InstructorList />} /> */}
           {/* Protected Create Course Route for Instructors */}
           <Route
             path='/create-course'

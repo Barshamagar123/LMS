@@ -12,13 +12,10 @@ const API = axios.create({
 // Add a request interceptor to attach token automatically
 API.interceptors.request.use(
   (config) => {
-    // Get token from localStorage (from AuthContext)
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      const user = JSON.parse(storedUser);
-      if (user.token) {
-        config.headers["Authorization"] = `Bearer ${user.token}`;
-      }
+    // Get token from localStorage (stored separately by AuthContext)
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers["Authorization"] = `Bearer ${token}`;
     }
     return config;
   },

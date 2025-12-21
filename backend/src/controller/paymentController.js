@@ -10,8 +10,11 @@ export const processPayment = asyncHandler(async (req, res) => {
   const { courseId, paymentMethod, paymentDetails } = req.body;
   const userId = req.user.userId;
 
+  console.log('Payment request received:', { courseId, paymentMethod, userId });
+
   // Validate required fields
   if (!courseId || !paymentMethod) {
+    console.log('Validation failed: missing courseId or paymentMethod');
     return res.status(400).json({
       success: false,
       message: "Course ID and payment method are required"
@@ -20,6 +23,7 @@ export const processPayment = asyncHandler(async (req, res) => {
 
   try {
     // Process payment and create enrollment
+    console.log('Calling paymentService.processPaymentAndEnroll');
     const result = await paymentService.processPaymentAndEnroll({
       userId,
       courseId: Number(courseId),
@@ -27,6 +31,7 @@ export const processPayment = asyncHandler(async (req, res) => {
       paymentDetails: paymentDetails || {}
     });
 
+    console.log('Payment successful:', result);
     res.status(200).json({
       success: true,
       message: "Payment successful and enrollment created",
@@ -34,6 +39,8 @@ export const processPayment = asyncHandler(async (req, res) => {
     });
 
   } catch (error) {
+    console.error('Payment processing error:', error);
+
     // Handle specific errors
     if (error.message.includes('already enrolled') || error.status === 409) {
       return res.status(409).json({

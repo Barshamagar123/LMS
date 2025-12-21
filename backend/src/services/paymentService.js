@@ -59,25 +59,26 @@ export const processPaymentAndEnroll = async ({ userId, courseId, paymentMethod,
       throw error;
     }
 
-    // 4. Create payment record
-    const payment = await tx.payment.create({
-      data: {
-        userId: userId,
-        courseId: courseId,
-        amount: course.price,
-        status: "SUCCESS",
-        paymentMethod: paymentMethod.toUpperCase(),
-        paymentDetails: JSON.stringify(paymentDetails)
-      }
-    });
-
-    // 5. Create enrollment
+    // 4. Create enrollment first
     const enrollment = await tx.enrollment.create({
       data: {
         userId: userId,
         courseId: courseId,
         progress: 0,
         status: "IN_PROGRESS"
+      }
+    });
+
+    // 5. Create payment record linked to enrollment
+    const payment = await tx.payment.create({
+      data: {
+        userId: userId,
+        courseId: courseId,
+        enrollmentId: enrollment.id,
+        amount: course.price,
+        status: "SUCCESS",
+        paymentMethod: paymentMethod.toUpperCase(),
+        paymentDetails: JSON.stringify(paymentDetails)
       }
     });
 
@@ -404,6 +405,35 @@ export const getPaymentAnalytics = async (startDate, endDate) => {
       enrollments: course._count.enrollments,
       successfulPayments: course._count.payments
     }))
+  };
+};
+
+/**
+ * Create payment intent (for card payments)
+ */
+export const createPaymentIntent = async ({ userId, courseId, amount }) => {
+  // This is a placeholder for actual payment gateway integration
+  // In a real implementation, this would create an intent with Stripe, PayPal, etc.
+
+  const course = await prisma.course.findUnique({
+    where: { id: courseId }
+  });
+
+  if (!course) {
+    throw new Error("Course not found");
+  }
+
+  if (course.price !== amount) {
+    throw new Error("Amount does not match course price");
+  }
+
+  // Return a mock payment intent for demo purposes
+  return {
+    id: `intent_${Date.now()}`,
+    client_secret: `secret_${Date.now()}`,
+    amount: amount,
+    currency: 'USD',
+    status: 'requires_payment_method'
   };
 };
 

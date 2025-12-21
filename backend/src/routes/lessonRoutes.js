@@ -1,6 +1,4 @@
 import express from "express";
-import multer from "multer";
-import path from "path";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { roleMiddleware } from "../middleware/roleMiddleware.js";
 import {
@@ -10,55 +8,33 @@ import {
   listLessons
 } from "../controller/lessonController.js";
 
+// Import your existing multer config
+import { uploads } from "../config/multer.js";
+
 const router = express.Router();
 
-// Create uploads folder if not exists
-import fs from "fs";
-const uploadDir = "./uploads";
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-
-// Multer storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
-});
-
-// Allow video, audio, image, pdf
-const upload = multer({
-  storage,
-  fileFilter: (req, file, cb) => {
-    const allowed = [
-      "video/",
-      "audio/",
-      "image/",
-      "application/pdf"
-    ];
-    if (!allowed.some(type => file.mimetype.startsWith(type))) {
-      return cb(new Error("Unsupported file type"), false);
-    }
-    cb(null, true);
-  }
-});
-
-// Create lesson
+// Create lesson for a module
+// URL: POST /api/modules/:moduleId/lessons
 router.post(
   "/modules/:moduleId/lessons",
   authMiddleware,
   roleMiddleware(["INSTRUCTOR"]),
-  upload.single("file"),   
+  uploads.courseVideo.single("file"),  // Uses course-videos folder
   createLesson
 );
 
-// Update lesson
+// Update a lesson
+// URL: PATCH /api/lessons/:lessonId
 router.patch(
   "/lessons/:lessonId",
   authMiddleware,
   roleMiddleware(["INSTRUCTOR"]),
-  upload.single("file"),
+  uploads.courseVideo.single("file"),
   updateLesson
 );
 
-// Delete
+// Delete a lesson
+// URL: DELETE /api/lessons/:lessonId
 router.delete(
   "/lessons/:lessonId",
   authMiddleware,
@@ -66,7 +42,8 @@ router.delete(
   deleteLesson
 );
 
-// List lessons by module
+// List all lessons for a module
+// URL: GET /api/modules/:moduleId/lessons
 router.get(
   "/modules/:moduleId/lessons",
   authMiddleware,
