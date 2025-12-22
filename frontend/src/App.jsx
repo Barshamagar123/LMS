@@ -31,8 +31,8 @@ import PaymentPage from './pages/Courses/PaymentPage';
 import PaymentSuccessPage from './pages/Courses/PaymentSuccessPage';
 import CourseLearningPage from './components/CourseLearningPage';
 // import CategoryDisplay from './components/CategoryDisplay';
-// import InstructorList from './components/InstructorList';
-
+import InstructorList from './components/InstructorList';
+import InstructorDetail from './components/InstructorDetails';
 const App = () => {
   return (
     <AuthProvider>
@@ -48,7 +48,9 @@ const App = () => {
           <Route path='/courses/:id' element={<CourseDetail />} />
           <Route path="/courses/:id/learn" element={<CourseLearningPage />} />
           {/* <Route path="/categories" element={<CategoryDisplay />} /> */}
-          {/* <Route path="/instructors" element={<InstructorList />} /> */}
+          <Route path="/instructors" element={<InstructorList />} />
+
+        <Route path="/instructors/:id" element={<InstructorDetail />} />
           {/* Protected Create Course Route for Instructors */}
           <Route
             path='/create-course'
