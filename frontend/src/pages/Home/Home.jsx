@@ -2,6 +2,7 @@ import React from 'react'
 import Navbar from '../../components/Navbar'
 import { Play, Star, Users, Award, Clock, CheckCircle, GraduationCap, ArrowRight, BookOpen, Globe, Shield, TrendingUp } from "lucide-react";
 import CoursesPage from '../Courses/Courses';
+import FeatureCoursesPage from '../Courses/featuresCourses';
 
 export default function HomePage() {
   const features = [
@@ -134,7 +135,7 @@ export default function HomePage() {
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
        
-          <CoursesPage />
+          <FeatureCoursesPage />
         </div>
       </section>
 

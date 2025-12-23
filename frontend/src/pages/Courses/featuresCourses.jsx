@@ -22,9 +22,8 @@ import {
   Zap
 } from 'lucide-react';
 import API from '../../api/axios';
-import Navbar from '../../components/Navbar';
 
-const CoursesPage = () => {
+const FeatureCoursesPage = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   
@@ -652,7 +651,7 @@ const CoursesPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 py-12">
-      <Navbar />
+     
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
        
@@ -1277,4 +1276,4 @@ const CoursesPage = () => {
   );
 };
 
-export default CoursesPage;
+export default FeatureCoursesPage;

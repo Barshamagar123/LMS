@@ -34,7 +34,7 @@ export default function Navbar() {
   const navItems = [
     { label: "Home", path: "/" },
     { label: "Courses", path: "/courses" },
-    { label: "Categories", path: "/categories" },
+    { label: "Categories", path: "/category" },
     { label: "Instructors", path: "/instructors" },
     { label: "Resources", path: "/resources" },
   ];
