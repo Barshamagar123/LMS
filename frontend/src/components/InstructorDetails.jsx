@@ -36,6 +36,7 @@ import {
   Category as CategoryIcon
 } from '@mui/icons-material';
 import API from '../api/axios'; // Import your existing axios instance
+import { formatProfilePictureUrl } from '../utils/imageUtils';
 
 const InstructorDetail = () => {
   const { id } = useParams();
@@ -169,7 +170,7 @@ const InstructorDetail = () => {
           <Grid container spacing={4} alignItems="center">
             <Grid item xs={12} md={3} sx={{ textAlign: 'center' }}>
               <Avatar
-                src={instructor.profilePicture}
+                src={formatProfilePictureUrl(instructor.profilePicture)}
                 sx={{
                   width: 150,
                   height: 150,

@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import API from '../../api/axios';
+import { formatProfilePictureUrl } from '../../utils/imageUtils';
 import {
   User, Briefcase, Globe, Linkedin, Github, Twitter,
-  Calendar, Edit2, ArrowLeft, Loader2, Mail, Award, 
+  Calendar, Edit2, ArrowLeft, Loader2, Mail, Award,
   BookOpen, Star, Users, GraduationCap, ExternalLink,
   Share2, Globe as GlobeIcon, MapPin, Clock
 } from 'lucide-react';
@@ -16,11 +17,6 @@ const InstructorProfile = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
-  // Get backend URL and create separate URL for static files
-  const BACKEND_URL = API.defaults.baseURL || 'http://localhost:3000';
-  // Remove /api from URL for static files
-  const STATIC_BASE_URL = BACKEND_URL.replace('/api', '');
-
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -37,33 +33,6 @@ const InstructorProfile = () => {
 
     fetchProfile();
   }, []);
-
-  // Function to fix image URL
-  const getImageUrl = (imagePath) => {
-    if (!imagePath) return null;
-    
-    // If it's already a full URL
-    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-      return imagePath;
-    }
-    
-    // Fix common issues with image paths
-    let fixedPath = imagePath;
-    
-    // Ensure path starts with /uploads
-    if (!fixedPath.startsWith('/uploads/')) {
-      fixedPath = `/uploads/${fixedPath}`;
-    }
-    
-    // Ensure profile-pictures folder is included
-    if (fixedPath.startsWith('/uploads/') && !fixedPath.includes('/profile-pictures/')) {
-      const filename = fixedPath.split('/').pop();
-      fixedPath = `/uploads/profile-pictures/${filename}`;
-    }
-    
-    // Build full URL with static base URL (without /api)
-    return `${STATIC_BASE_URL}${fixedPath}`;
-  };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -131,7 +100,7 @@ const InstructorProfile = () => {
     );
   }
 
-  const imageUrl = getImageUrl(profile.profilePicture);
+  const imageUrl = formatProfilePictureUrl(profile.profilePicture);
   const engagement = calculateEngagement();
 
   return (
