@@ -29,7 +29,7 @@ import lessonRoutes from "./src/routes/lessonRoutes.js";
 import userRoutes from "./src/routes/userRoutes.js";
 import instructorRoutes from "./src/routes/instructorRoutes.js";
 import paymentRoutes from "./src/routes/paymentRoutes.js"
-
+import lessonProgressRoutes from "./src/routes/lessonProgressRoutes.js"
 const app = express();
 
 // Middleware
@@ -54,6 +54,7 @@ app.use("/api/enrollments", enrollmentRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/modules", moduleRoutes);
 app.use("/api", lessonRoutes);
+app.use('/api/progress', lessonProgressRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/instructor", instructorRoutes);

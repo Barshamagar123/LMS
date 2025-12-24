@@ -1,7 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-
 import Home from './pages/Home/Home';
 import RegisterPage from './pages/Register/Register';
 import LoginPage from './pages/Login/Login';
@@ -11,14 +10,12 @@ import ProtectedRoute from './components/ProtectedRoute';
 import StudentDashboard from './pages/student-dashboard/StudentDashboard';
 import SendOTP from './pages/AdminOTPLogin/AdminOTPLogin';
 import VerifyOTP from './pages/AdminOTPLogin/VerifyOTP';
-
 import CourseManagement from './pages/admin-dashboard/CourseManagement';
 import AnalyticsDashboard from './pages/admin-dashboard/AnalyticsDashboard';
 import SystemSettings from './pages/admin-dashboard/SystemSettings';
 import UserManagement from './pages/admin-dashboard/UserManagement';
 import CourseForm from './components/CourseForm';
 import CourseEdit from './components/CourseEdit';
-
 import CourseDetail from './pages/Courses/CourseDetails';
 import CategoryManagement from './pages/admin-dashboard/CategoryManagement';
 import CoursePlayerModal from './pages/Courses/Courses';
@@ -29,11 +26,11 @@ import EditInstructorProfile from './pages/instructor-dashboard/EditInstructorPr
 import InstructorProfile from './pages/instructor-dashboard/InstructorProfile';
 import PaymentPage from './pages/Courses/PaymentPage';
 import PaymentSuccessPage from './pages/Courses/PaymentSuccessPage';
-import CourseLearningPage from './components/CourseLearningPage';
 // import CategoryDisplay from './components/CategoryDisplay';
 import InstructorList from './components/InstructorList';
 import InstructorDetail from './components/InstructorDetails';
 import CategoryList from './components/CategoryList';
+import CourseLearnPage from './pages/Courses/CourseLearnPage';
 const App = () => {
   return (
     <AuthProvider>
@@ -47,7 +44,8 @@ const App = () => {
           <Route path='/verify-otp' element={<VerifyOTP />} />
           <Route path='/courses' element={<ErrorBoundary><CoursePlayerModal /></ErrorBoundary>} />
           <Route path='/courses/:id' element={<CourseDetail />} />
-          <Route path="/courses/:id/learn" element={<CourseLearningPage />} />
+           // Add this to your routes
+          <Route path="/courses/:courseId/learn" element={<CourseLearnPage />} />
           {/* <Route path="/categories" element={<CategoryDisplay />} /> */}
           <Route path="/instructors" element={<InstructorList />} />
           <Route path='/category' element={<CategoryList />} />
