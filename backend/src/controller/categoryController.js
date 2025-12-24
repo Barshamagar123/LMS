@@ -43,3 +43,46 @@ export const list = asyncHandler(async (req, res) => {
   });
   res.json(categories);
 });
+// Add this to your categoryController.js
+export const getCategoryStats = asyncHandler(async (req, res) => {
+  const categories = await prisma.category.findMany({
+    orderBy: { name: "asc" },
+    include: {
+      _count: {
+        select: {
+          courses: {
+            where: { status: "PUBLISHED" }
+          }
+        }
+      }
+    }
+  });
+
+  // Calculate student counts per category
+  const categoriesWithStats = await Promise.all(
+    categories.map(async (category) => {
+      const studentCount = await prisma.enrollment.count({
+        where: {
+          course: {
+            categoryId: category.id,
+            status: "PUBLISHED"
+          }
+        }
+      });
+
+      return {
+        ...category,
+        courseCount: category._count.courses,
+        studentCount
+      };
+    })
+  );
+
+  const totalCourses = categoriesWithStats.reduce((sum, cat) => sum + cat.courseCount, 0);
+  const totalStudents = categoriesWithStats.reduce((sum, cat) => sum + cat.studentCount, 0);
+
+  res.json({
+    categories: categoriesWithStats,
+    stats: { totalCourses, totalStudents }
+  });
+});

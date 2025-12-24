@@ -12,5 +12,6 @@ router.delete("/:id", authMiddleware, isAdmin, categoryController.remove);
 
 // Public
 router.get("/", categoryController.list);
+router.get("/stats", categoryController.getCategoryStats);
 
 export default router;
