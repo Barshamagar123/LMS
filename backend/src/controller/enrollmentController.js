@@ -44,10 +44,53 @@ export const freeEnroll = asyncHandler(async (req, res) => {
 export const getMyEnrollments = asyncHandler(async (req, res) => {
   const enrollments = await enrollmentService.getUserEnrollments(req.user.userId);
   
+  // Format response for frontend dashboard
+  const formattedEnrollments = enrollments.map(enrollment => {
+    // Calculate total duration from lessons
+    const totalDuration = enrollment.course?.modules?.reduce((sum, module) => {
+      return sum + (module.lessons?.reduce((lessonSum, lesson) => 
+        lessonSum + (lesson.duration || 0), 0) || 0);
+    }, 0) || 0;
+    
+    return {
+      // Course details
+      id: enrollment.course?.id || enrollment.courseId,
+      title: enrollment.course?.title || 'Untitled Course',
+      description: enrollment.course?.description || '',
+      instructor: enrollment.course?.instructor?.name || 'Unknown Instructor',
+      instructorId: enrollment.course?.instructor?.id,
+      thumbnail: enrollment.course?.thumbnail,
+      price: enrollment.course?.price || 0,
+      rating: enrollment.course?.rating || 0,
+      category: enrollment.course?.category?.name || 'General',
+      categoryId: enrollment.course?.category?.id,
+      
+      // Enrollment details
+      enrollmentId: enrollment.id,
+      progress: enrollment.progress || 0,
+      status: enrollment.status || 'IN_PROGRESS',
+      enrolledAt: enrollment.createdAt,
+      lastAccessed: enrollment.updatedAt,
+      
+      // Learning stats
+      completedLessons: enrollment.completedLessons || 0,
+      totalLessons: enrollment.totalLessons || 0,
+      duration: Math.round(totalDuration / 60), // Convert to minutes
+      
+      // Additional stats for dashboard
+      stats: enrollment.stats || {
+        totalModules: enrollment.course?.modules?.length || 0,
+        totalLessons: enrollment.totalLessons || 0,
+        completedLessons: enrollment.completedLessons || 0,
+        progressPercentage: enrollment.progress || 0
+      }
+    };
+  });
+  
   res.json({
     success: true,
-    count: enrollments.length,
-    data: enrollments
+    count: formattedEnrollments.length,
+    data: formattedEnrollments
   });
 });
 

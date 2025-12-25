@@ -7,7 +7,8 @@ import {
   deleteCourse,
   instructorCourses,
   instructorStats,
-  uploadCourseThumbnail  // Added this import
+  uploadCourseThumbnail,
+  getRecommendedCourses  // Added this import
 } from "../controller/courseController.js";
 
 import { authMiddleware } from "../middleware/authMiddleware.js";
@@ -115,6 +116,11 @@ router.get("/:id/check-ownership",
       }
     });
   }
+);
+// Add in the public routes section
+router.get("/recommended", 
+  authMiddleware, 
+  getRecommendedCourses  // Make sure this function is imported
 );
 
 export default router;

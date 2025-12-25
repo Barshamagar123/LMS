@@ -93,8 +93,22 @@ const VideoPlayer = forwardRef(({
 
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
+      console.log('Video loaded metadata:', videoRef.current.duration);
       onDurationChange(videoRef.current.duration);
     }
+  };
+
+  const handleError = (e) => {
+    console.error('Video error:', e);
+    console.error('Video src:', formatVideoUrl(src));
+  };
+
+  const handleLoadStart = () => {
+    console.log('Video load start');
+  };
+
+  const handleCanPlay = () => {
+    console.log('Video can play');
   };
 
   const handleVolumeChange = (newVolume) => {
@@ -174,6 +188,7 @@ const VideoPlayer = forwardRef(({
         <video
           ref={videoRef}
           src={formatVideoUrl(src)}
+          crossOrigin="anonymous"
           style={{
             width: '100%',
             height: '100%',
@@ -182,15 +197,15 @@ const VideoPlayer = forwardRef(({
           }}
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
+          onError={handleError}
+          onLoadStart={handleLoadStart}
+          onCanPlay={handleCanPlay}
           onEnded={onEnded}
           onPlay={() => onPlayPause(true)}
           onPause={() => onPlayPause(false)}
           controls={false}
           preload="metadata"
-        >
-          <source src={formatVideoUrl(src)} type="video/mp4" />
-          Your browser does not support the video tag.
-        </video>
+        />
       );
     } else {
       // Handle other content types (PDF, Audio, etc.)

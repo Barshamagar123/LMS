@@ -30,12 +30,25 @@ import userRoutes from "./src/routes/userRoutes.js";
 import instructorRoutes from "./src/routes/instructorRoutes.js";
 import paymentRoutes from "./src/routes/paymentRoutes.js"
 import lessonProgressRoutes from "./src/routes/lessonProgressRoutes.js"
+import achievementRoutes from "./src/routes/achievementRoutes.js"
 const app = express();
 
 // Middleware
 app.use(express.json());
 app.use(bodyParser.json());
-app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    // Allow localhost with any port for development
+    if (origin.startsWith('http://localhost:')) return callback(null, true);
+
+    // Reject other origins in production
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true
+}));
 
 // ============ STATIC FILE SERVING ============
 // Serve all uploads from the root uploads folder
@@ -58,7 +71,7 @@ app.use('/api/progress', lessonProgressRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/instructor", instructorRoutes);
-
+app.use('/api/users', achievementRoutes);
 // ============ HEALTH CHECK ============
 app.get("/", (req, res) => res.send("API Running..."));
 

@@ -1,6 +1,7 @@
 import * as courseService from "../services/courseService.js";
 import asyncHandler from "../middleware/asyncHandler.js";
 import { getFileUrl } from "../config/multer.js";
+import prisma from "../config/prisma.js";
 
 export const listCourses = asyncHandler(async (req, res) => {
   const filters = {
@@ -16,7 +17,11 @@ export const listCourses = asyncHandler(async (req, res) => {
 });
 
 export const courseDetails = asyncHandler(async (req, res) => {
-  const course = await courseService.getCourseDetails(Number(req.params.id));
+  const courseId = Number(req.params.id);
+  if (isNaN(courseId)) {
+    return res.status(400).json({ message: "Invalid course id" });
+  }
+  const course = await courseService.getCourseDetails(courseId);
   if (!course) return res.status(404).json({ message: "Course not found" });
   const recommendations = await courseService.recommendCourses(4, course.id);
   res.json({ course, recommendations });
@@ -45,19 +50,27 @@ export const createCourse = asyncHandler(async (req, res) => {
 });
 
 export const updateCourse = asyncHandler(async (req, res) => {
+  const courseId = Number(req.params.id);
+  if (isNaN(courseId)) {
+    return res.status(400).json({ message: "Invalid course id" });
+  }
   const updates = req.body;
-  
+
   // Handle thumbnail if file was uploaded
   if (req.file) {
     updates.thumbnail = getFileUrl(req.file, 'courseThumbnail');
   }
-  
-  const course = await courseService.updateCourse(Number(req.params.id), updates);
+
+  const course = await courseService.updateCourse(courseId, updates);
   res.json(course);
 });
 
 export const deleteCourse = asyncHandler(async (req, res) => {
-  await courseService.deleteCourse(Number(req.params.id));
+  const courseId = Number(req.params.id);
+  if (isNaN(courseId)) {
+    return res.status(400).json({ message: "Invalid course id" });
+  }
+  await courseService.deleteCourse(courseId);
   res.json({ message: "Course deleted" });
 });
 
@@ -74,22 +87,104 @@ export const instructorStats = asyncHandler(async (req, res) => {
 // NEW: Separate thumbnail upload endpoint (optional)
 export const uploadCourseThumbnail = asyncHandler(async (req, res) => {
   const courseId = Number(req.params.id);
-  
+  if (isNaN(courseId)) {
+    return res.status(400).json({ message: "Invalid course id" });
+  }
+
   if (!req.file) {
     return res.status(400).json({ message: "No thumbnail file uploaded" });
   }
-  
+
   // Get thumbnail URL
   const thumbnail = getFileUrl(req.file, 'courseThumbnail');
-  
+
   // Update course with thumbnail
-  const updatedCourse = await courseService.updateCourse(courseId, { 
-    thumbnail 
+  const updatedCourse = await courseService.updateCourse(courseId, {
+    thumbnail
   });
-  
+
   res.json({
     message: "Thumbnail uploaded successfully",
     thumbnail,
     course: updatedCourse
+  });
+});
+/**
+ * @desc    Get recommended courses for student
+ * @route   GET /api/courses/recommended
+ * @access  Private (Student)
+ */
+export const getRecommendedCourses = asyncHandler(async (req, res) => {
+  const limit = req.query.limit || 10;
+  const userId = req.user.userId;
+  
+  // Get user's enrolled course IDs to exclude
+  const userEnrollments = await prisma.enrollment.findMany({
+    where: { userId },
+    select: { courseId: true }
+  });
+  
+  const enrolledCourseIds = userEnrollments.map(e => e.courseId);
+  
+  // Get recommended courses (excluding already enrolled)
+  const recommended = await prisma.course.findMany({
+    where: {
+      status: "PUBLISHED",
+      id: { notIn: enrolledCourseIds },
+      price: 0 // Only free courses for recommendations
+    },
+    take: Number(limit),
+    orderBy: { 
+      rating: "desc",
+      createdAt: "desc" 
+    },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      price: true,
+      rating: true,
+      thumbnail: true,
+      instructor: {
+        select: {
+          id: true,
+          name: true,
+          profilePicture: true
+        }
+      },
+      category: {
+        select: {
+          id: true,
+          name: true
+        }
+      },
+      _count: {
+        select: {
+          enrollments: true,
+          reviews: true
+        }
+      }
+    }
+  });
+  
+  const formattedCourses = recommended.map(course => ({
+    id: course.id,
+    title: course.title,
+    description: course.description,
+    instructor: course.instructor.name,
+    instructorAvatar: course.instructor.profilePicture,
+    price: course.price,
+    rating: course.rating,
+    thumbnail: course.thumbnail,
+    category: course.category.name,
+    enrollmentCount: course._count.enrollments,
+    reviewCount: course._count.reviews,
+    isFree: course.price === 0
+  }));
+  
+  res.json({
+    success: true,
+    count: formattedCourses.length,
+    data: formattedCourses
   });
 });

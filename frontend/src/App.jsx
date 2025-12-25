@@ -7,7 +7,7 @@ import LoginPage from './pages/Login/Login';
 import InstructorDashboard from './pages/instructor-dashboard/InstructorDashboard';
 import AdminDashboard from './pages/admin-dashboard/AdminDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
-import StudentDashboard from './pages/student-dashboard/StudentDashboard';
+// import StudentDashboard from './pages/student-dashboard/StudentDashboard';
 import SendOTP from './pages/AdminOTPLogin/AdminOTPLogin';
 import VerifyOTP from './pages/AdminOTPLogin/VerifyOTP';
 import CourseManagement from './pages/admin-dashboard/CourseManagement';
@@ -168,14 +168,14 @@ const App = () => {
           />
 
           {/* Protected Student Routes */}
-          <Route
+          {/* <Route
             path='/student-dashboard'
             element={
               <ProtectedRoute role="STUDENT">
                 <StudentDashboard />
               </ProtectedRoute>
             }
-          />
+          /> */}
 
           {/* 404 Page */}
           <Route path='*' element={

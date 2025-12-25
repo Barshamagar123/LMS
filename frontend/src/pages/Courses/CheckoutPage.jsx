@@ -57,6 +57,7 @@ const CheckoutPage = () => {
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [alreadyEnrolled, setAlreadyEnrolled] = useState(false);
   const [alreadyPaid, setAlreadyPaid] = useState(false);
+  const [enrollmentId, setEnrollmentId] = useState(null);
 
   // Get user from localStorage
   const getUserFromStorage = () => {
@@ -80,10 +81,16 @@ const CheckoutPage = () => {
   // Check if user is already enrolled or has paid
   const checkEnrollmentStatus = async (userId, courseId) => {
     try {
+      console.log('🔍 Checking enrollment status...');
+      
       // Check enrollment
       const enrollmentCheck = await API.get(`/enrollments/check/${courseId}`);
-      if (enrollmentCheck.data?.isEnrolled) {
+      console.log('📋 Enrollment check response:', enrollmentCheck.data);
+      
+      if (enrollmentCheck.data?.isEnrolled && enrollmentCheck.data?.data?.id) {
         setAlreadyEnrolled(true);
+        setEnrollmentId(enrollmentCheck.data.data.id);
+        console.log('✅ Already enrolled with ID:', enrollmentCheck.data.data.id);
         return true;
       }
 
@@ -98,6 +105,77 @@ const CheckoutPage = () => {
     } catch (err) {
       console.error('Error checking enrollment status:', err);
       return false;
+    }
+  };
+
+  // Get enrollment ID for already enrolled user
+  const getEnrollmentIdForCourse = async () => {
+    try {
+      console.log('🔍 Fetching enrollment details for course:', courseId);
+      
+      // Method 1: Check enrollments/me endpoint
+      const enrollmentsRes = await API.get('/enrollments/me');
+      console.log('📋 My enrollments:', enrollmentsRes.data);
+      
+      if (enrollmentsRes.data?.success && Array.isArray(enrollmentsRes.data.data)) {
+        const myEnrollments = enrollmentsRes.data.data;
+        const enrollment = myEnrollments.find(e => 
+          e.course?.id === parseInt(courseId) || 
+          e.courseId === parseInt(courseId) ||
+          (e.course && e.course.id === parseInt(courseId))
+        );
+        
+        if (enrollment) {
+          const foundId = enrollment.enrollmentId || enrollment.id;
+          console.log('✅ Found enrollment ID in /enrollments/me:', foundId);
+          setEnrollmentId(foundId);
+          return foundId;
+        }
+      }
+      
+      // Method 2: Try to get specific enrollment
+      try {
+        const specificRes = await API.get(`/enrollments/course/${courseId}`);
+        console.log('📋 Specific enrollment response:', specificRes.data);
+        
+        if (specificRes.data?.success && specificRes.data.data?.id) {
+          setEnrollmentId(specificRes.data.data.id);
+          console.log('✅ Found enrollment ID:', specificRes.data.data.id);
+          return specificRes.data.data.id;
+        }
+      } catch (specificErr) {
+        console.log('⚠️ Could not get specific enrollment:', specificErr.message);
+      }
+      
+      console.log('❌ No enrollment ID found');
+      return null;
+      
+    } catch (err) {
+      console.error('Error getting enrollment ID:', err);
+      return null;
+    }
+  };
+
+  // Navigate to course with enrollment ID
+  const navigateToCourse = async () => {
+    try {
+      // Try to get enrollment ID if not already set
+      let id = enrollmentId;
+      if (!id) {
+        id = await getEnrollmentIdForCourse();
+      }
+      
+      // Navigate with enrollment ID if available
+      if (id) {
+        console.log(`🚀 Navigating to: /courses/${courseId}/learn?enrollment=${id}`);
+        navigate(`/courses/${courseId}/learn?enrollment=${id}`);
+      } else {
+        console.log(`⚠️ No enrollment ID, navigating to: /courses/${courseId}/learn`);
+        navigate(`/courses/${courseId}/learn`);
+      }
+    } catch (err) {
+      console.error('Error navigating to course:', err);
+      navigate(`/courses/${courseId}/learn`);
     }
   };
 
@@ -142,6 +220,8 @@ const CheckoutPage = () => {
         // Check if already enrolled/paid
         const isEnrolled = await checkEnrollmentStatus(userData.id, courseId);
         if (isEnrolled) {
+          // Get enrollment ID if already enrolled
+          await getEnrollmentIdForCourse();
           return;
         }
         
@@ -215,7 +295,7 @@ const CheckoutPage = () => {
     if (alreadyEnrolled || alreadyPaid) {
       setError('You are already enrolled in this course');
       setTimeout(() => {
-        navigate(`/courses/${courseId}/learn`);
+        navigateToCourse();
       }, 2000);
       return;
     }
@@ -248,10 +328,19 @@ const CheckoutPage = () => {
           date: new Date().toISOString()
         }));
         
-        // Redirect to learning page after 2 seconds
+        // Get enrollment ID from response
+        const newEnrollmentId = response.data.data?.enrollment?.id || 
+                               response.data.data?.enrollmentId ||
+                               response.data.data?.id;
+        
+        // Redirect to learning page with enrollment ID
         setTimeout(() => {
-          const enrollmentId = response.data.data?.enrollment?.id;
-          navigate(`/courses/${courseId}/learn${enrollmentId ? `?enrollment=${enrollmentId}` : ''}`);
+          if (newEnrollmentId) {
+            console.log(`🚀 Navigating with new enrollment ID: ${newEnrollmentId}`);
+            navigate(`/courses/${courseId}/learn?enrollment=${newEnrollmentId}`);
+          } else {
+            navigateToCourse();
+          }
         }, 2000);
       }
       
@@ -267,13 +356,14 @@ const CheckoutPage = () => {
         // Update state
         if (errorData?.code === 'ALREADY_ENROLLED') {
           setAlreadyEnrolled(true);
+          await getEnrollmentIdForCourse();
         } else if (errorData?.code === 'DUPLICATE_PAYMENT') {
           setAlreadyPaid(true);
         }
         
         // Redirect after 3 seconds
         setTimeout(() => {
-          navigate(`/courses/${courseId}/learn`);
+          navigateToCourse();
         }, 3000);
         
       } else if (err.response?.status === 400) {
@@ -318,10 +408,10 @@ const CheckoutPage = () => {
           </p>
           <div className="space-y-3">
             <button
-              onClick={() => navigate(`/courses/${courseId}/learn`)}
+              onClick={navigateToCourse}
               className="w-full px-5 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
             >
-              Go to Course
+              {enrollmentId ? 'Go to Course' : 'Continue Learning'}
             </button>
             <button
               onClick={() => navigate('/courses')}
@@ -353,7 +443,7 @@ const CheckoutPage = () => {
               Browse Courses
             </button>
             <button
-              onClick={() => fetchData()}
+              onClick={() => window.location.reload()}
               className="w-full px-5 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
             >
               Try Again

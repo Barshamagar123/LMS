@@ -154,16 +154,16 @@ export const getUserEnrollments = async (userId) => {
 
   // Calculate progress for each enrollment
   return enrollments.map(enrollment => {
-    const totalLessons = enrollment.course.modules.reduce(
-      (sum, module) => sum + (module.lessons?.length || 0), 
+    const totalLessons = enrollment.course?.modules?.reduce(
+      (sum, module) => sum + (module?.lessons?.length || 0),
       0
-    );
-    
-    const completedLessons = enrollment.lessonProgress.filter(
-      lp => lp.completed
-    ).length;
-    
-    const progress = totalLessons > 0 
+    ) || 0;
+
+    const completedLessons = enrollment.lessonProgress?.filter(
+      lp => lp?.completed
+    )?.length || 0;
+
+    const progress = totalLessons > 0
       ? Math.round((completedLessons / totalLessons) * 100)
       : 0;
 
@@ -173,7 +173,7 @@ export const getUserEnrollments = async (userId) => {
       completedLessons,
       totalLessons,
       stats: {
-        totalModules: enrollment.course.modules.length,
+        totalModules: enrollment.course?.modules?.length || 0,
         totalLessons,
         completedLessons,
         progressPercentage: progress
@@ -225,11 +225,11 @@ export const checkEnrollment = async (userId, courseId) => {
     }
   });
 
-  const completedLessons = enrollment.lessonProgress.filter(
-    lp => lp.completed
-  ).length;
+  const completedLessons = enrollment.lessonProgress?.filter(
+    lp => lp?.completed
+  )?.length || 0;
 
-  const progress = totalLessons > 0 
+  const progress = totalLessons > 0
     ? Math.round((completedLessons / totalLessons) * 100)
     : 0;
 
@@ -265,7 +265,7 @@ export const getEnrollmentById = async (enrollmentId, userId) => {
             include: {
               lessons: {
                 include: {
-                  lessonProgress: {
+                  lessonProgresses: {
                     where: {
                       enrollmentId: Number(enrollmentId)
                     }
@@ -290,17 +290,17 @@ export const getEnrollmentById = async (enrollmentId, userId) => {
     throw error;
   }
 
-  // Calculate progress
-  const totalLessons = enrollment.course.modules.reduce(
-    (sum, module) => sum + (module.lessons?.length || 0), 
+  // Calculate progress with null safety
+  const totalLessons = enrollment.course?.modules?.reduce(
+    (sum, module) => sum + (module?.lessons?.length || 0),
     0
-  );
-  
-  const completedLessons = enrollment.lessonProgress.filter(
-    lp => lp.completed
-  ).length;
-  
-  const progress = totalLessons > 0 
+  ) || 0;
+
+  const completedLessons = enrollment.lessonProgress?.filter(
+    lp => lp?.completed
+  )?.length || 0;
+
+  const progress = totalLessons > 0
     ? Math.round((completedLessons / totalLessons) * 100)
     : 0;
 
@@ -775,4 +775,52 @@ export const updateLastAccessed = async (enrollmentId, userId) => {
   });
 
   return updatedEnrollment;
+};
+// Add these functions to enrollmentService.js
+
+/**
+ * Get instructor student count
+ */
+export const getInstructorStudentCount = async (instructorId) => {
+  const courses = await prisma.course.findMany({
+    where: { instructorId: Number(instructorId) },
+    select: { id: true }
+  });
+  
+  const courseIds = courses.map(c => c.id);
+  
+  if (courseIds.length === 0) return 0;
+  
+  const studentCount = await prisma.enrollment.count({
+    where: { 
+      courseId: { in: courseIds }
+    },
+    distinct: ['userId']
+  });
+  
+  return studentCount;
+};
+
+/**
+ * Get instructor revenue
+ */
+export const getInstructorRevenue = async (instructorId) => {
+  const courses = await prisma.course.findMany({
+    where: { instructorId: Number(instructorId) },
+    select: { id: true }
+  });
+  
+  const courseIds = courses.map(c => c.id);
+  
+  if (courseIds.length === 0) return 0;
+  
+  const revenue = await prisma.payment.aggregate({
+    where: { 
+      courseId: { in: courseIds },
+      status: "SUCCESS"
+    },
+    _sum: { amount: true }
+  });
+  
+  return revenue._sum.amount || 0;
 };

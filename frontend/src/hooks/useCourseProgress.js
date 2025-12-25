@@ -33,7 +33,32 @@ const useCourseProgress = (enrollmentId) => {
       }
     } catch (error) {
       console.error('Error fetching progress:', error);
-      toast.error(error.response?.data?.message || 'Failed to load progress data');
+
+      let errorMessage = 'Failed to load progress data';
+
+      if (error.response) {
+        // Server responded with error status
+        const status = error.response.status;
+        if (status === 401) {
+          errorMessage = 'Please log in to view course progress';
+        } else if (status === 403) {
+          errorMessage = 'You do not have permission to view this course';
+        } else if (status === 404) {
+          errorMessage = 'Course enrollment not found';
+        } else {
+          errorMessage = error.response.data?.message ||
+                        error.response.data?.error ||
+                        `Server error: ${status}`;
+        }
+      } else if (error.request) {
+        // Network error
+        errorMessage = 'Network error - please check your connection';
+      } else {
+        // Other error
+        errorMessage = error.message || 'An unexpected error occurred';
+      }
+
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -63,7 +88,29 @@ const useCourseProgress = (enrollmentId) => {
       }
     } catch (error) {
       console.error('Error updating progress:', error);
-      toast.error(error.response?.data?.message || 'Failed to save progress');
+
+      let errorMessage = 'Failed to save progress';
+
+      if (error.response) {
+        const status = error.response.status;
+        if (status === 401) {
+          errorMessage = 'Please log in to update progress';
+        } else if (status === 403) {
+          errorMessage = 'You do not have permission to update this progress';
+        } else if (status === 404) {
+          errorMessage = 'Lesson or enrollment not found';
+        } else {
+          errorMessage = error.response.data?.message ||
+                        error.response.data?.error ||
+                        `Server error: ${status}`;
+        }
+      } else if (error.request) {
+        errorMessage = 'Network error - please check your connection';
+      } else {
+        errorMessage = error.message || 'An unexpected error occurred';
+      }
+
+      toast.error(errorMessage);
       throw error;
     }
   };
@@ -86,7 +133,29 @@ const useCourseProgress = (enrollmentId) => {
       }
     } catch (error) {
       console.error('Error marking lesson complete:', error);
-      toast.error(error.response?.data?.message || 'Failed to mark lesson as completed');
+
+      let errorMessage = 'Failed to mark lesson as completed';
+
+      if (error.response) {
+        const status = error.response.status;
+        if (status === 401) {
+          errorMessage = 'Please log in to mark lessons as completed';
+        } else if (status === 403) {
+          errorMessage = 'You do not have permission to update this lesson';
+        } else if (status === 404) {
+          errorMessage = 'Lesson or enrollment not found';
+        } else {
+          errorMessage = error.response.data?.message ||
+                        error.response.data?.error ||
+                        `Server error: ${status}`;
+        }
+      } else if (error.request) {
+        errorMessage = 'Network error - please check your connection';
+      } else {
+        errorMessage = error.message || 'An unexpected error occurred';
+      }
+
+      toast.error(errorMessage);
       throw error;
     }
   };
