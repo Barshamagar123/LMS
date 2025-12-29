@@ -1,869 +1,985 @@
-// import React, { useState, useEffect } from 'react';
-// import { Link, useNavigate } from 'react-router-dom';
-// import {
-//   BookOpen,
-//   PlayCircle,
-//   Clock,
-//   Star,
-//   Search,
-//   Award,
-//   ChevronRight,
-//   UserCircle,
-//   Menu,
-//   X,
-//   LogOut,
-//   RefreshCw,
-//   AlertCircle,
-//   CheckCircle,
-//   Bell
-// } from 'lucide-react';
-// import API from '../../api/axios';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Calendar,
+  CalendarDays,
+  Award,
+  BookOpen,
+  Clock,
+  TrendingUp,
+  ChevronRight,
+  BarChart3,
+  Target,
+  Users,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  PlayCircle,
+  Star,
+  Eye,
+  Zap,
+  Trophy,
+  Flame,
+  Sparkles,
+  Search,
+  Filter,
+  ChevronDown,
+  X
+} from 'lucide-react';
+import API from '../../api/axios';
+import Navbar from '../../components/Navbar';
 
-// const StudentDashboard = () => {
-//   const navigate = useNavigate();
-//   const [loading, setLoading] = useState(true);
-//   const [error, setError] = useState('');
-//   const [success, setSuccess] = useState('');
-//   const [currentUser, setCurrentUser] = useState(null);
-//   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+const StudentDashboard = () => {
+  const navigate = useNavigate();
   
-//   // Dashboard data
-//   const [enrolledCourses, setEnrolledCourses] = useState([]);
-//   const [recommendedCourses, setRecommendedCourses] = useState([]);
-//   const [achievements, setAchievements] = useState([]);
-//   const [continueLearning, setContinueLearning] = useState([]);
+  // State
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [activeTab, setActiveTab] = useState('overview');
+  const [searchCourse, setSearchCourse] = useState('');
+  const [showCompleted, setShowCompleted] = useState(false);
   
-//   // Statistics
-//   const [stats, setStats] = useState({
-//     enrolledCourses: 0,
-//     completedCourses: 0,
-//     totalLearningHours: 0,
-//     averageRating: 0,
-//     streakDays: 7,
-//     achievementCount: 0
-//   });
+  // Data from backend APIs
+  const [stats, setStats] = useState({
+    enrolledCourses: 0,
+    completedCourses: 0,
+    inProgressCourses: 0,
+    totalLearningHours: 0,
+    averageRating: 0,
+    streakDays: 0,
+    achievementCount: 0,
+    completionRate: 0,
+    averageProgress: 0
+  });
+  
+  const [enrollments, setEnrollments] = useState([]);
+  const [recommendedCourses, setRecommendedCourses] = useState([]);
+  const [deadlines, setDeadlines] = useState([]);
+  const [achievements, setAchievements] = useState([]);
+  const [recentActivity, setRecentActivity] = useState([]);
+  
+  // Check authentication
+  const isLoggedIn = !!localStorage.getItem('token');
 
-//   // Get current user from API
-//   useEffect(() => {
-//     const fetchCurrentUser = async () => {
-//       try {
-//         const response = await API.get('/users/me');
-//         setCurrentUser(response.data);
-//         localStorage.setItem('user', JSON.stringify(response.data));
-//       } catch (err) {
-//         console.error('Error fetching user:', err);
-//         // If no user, redirect to login
-//         localStorage.removeItem('user');
-//         localStorage.removeItem('token');
-//         navigate('/login');
-//       }
-//     };
-//     fetchCurrentUser();
-//   }, [navigate]);
+  // Fetch all dashboard data
+  useEffect(() => {
+    if (!isLoggedIn) {
+      navigate('/login', { 
+        state: { 
+          from: '/dashboard', 
+          message: 'Please login to access your dashboard' 
+        } 
+      });
+      return;
+    }
+    
+    fetchDashboardData();
+  }, [isLoggedIn, navigate]);
 
-//   // Fetch student dashboard data
-//   const fetchDashboardData = async () => {
-//     try {
-//       setLoading(true);
-//       setError('');
-//       setSuccess('');
+  // Fetch dashboard data from your backend
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError('');
       
-//       // Check if user is logged in
-//       const token = localStorage.getItem('token');
-//       if (!token) {
-//         setError('Please login first');
-//         navigate('/login');
-//         return;
-//       }
+      const token = localStorage.getItem('token');
+      const headers = { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
 
-//       console.log('Fetching student dashboard data...');
+      // Fetch user stats (from your userController - GET /api/users/me/stats)
+      const statsResponse = await API.get('/users/me/stats', { headers });
+      if (statsResponse.data?.success) {
+        setStats(statsResponse.data.data);
+      }
+
+      // Fetch user enrollments (from your enrollmentController - GET /api/enrollments/me)
+      const enrollmentsResponse = await API.get('/enrollments/me', { headers });
+      if (enrollmentsResponse.data?.success) {
+        setEnrollments(enrollmentsResponse.data.data || []);
+      }
+
+      // Fetch recommended courses (from your courseController - GET /api/courses/recommended)
+      const recommendedResponse = await API.get('/courses/recommended?limit=6', { headers });
+      if (recommendedResponse.data?.success) {
+        setRecommendedCourses(recommendedResponse.data.data || []);
+      }
+
+      // Fetch upcoming deadlines (mock - create this endpoint based on your Deadline model)
+      // For now, we'll extract from enrollments
+      const mockDeadlines = generateDeadlinesFromEnrollments(enrollmentsResponse.data?.data || []);
+      setDeadlines(mockDeadlines);
+
+      // Fetch achievements (mock - create this endpoint based on your Achievement model)
+      const mockAchievements = generateMockAchievements(statsResponse.data?.data || {});
+      setAchievements(mockAchievements);
+
+      // Generate recent activity from enrollments
+      const activity = generateRecentActivity(enrollmentsResponse.data?.data || []);
+      setRecentActivity(activity);
+
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
       
-//       // 1. Fetch enrolled courses - CORRECTED ENDPOINT
-//       const enrolledRes = await API.get('/enrollments/me');
-//       console.log('Enrollments response:', enrolledRes);
+      if (err.response?.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login', { 
+          state: { 
+            from: '/dashboard', 
+            message: 'Session expired. Please login again.' 
+          } 
+        });
+      } else {
+        setError(err.response?.data?.message || 'Failed to load dashboard data. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Generate deadlines from enrollments (mock until you create the endpoint)
+  const generateDeadlinesFromEnrollments = (enrollmentsData) => {
+    const deadlines = [];
+    
+    enrollmentsData.slice(0, 3).forEach((enrollment, index) => {
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + (index + 3)); // 3, 4, 5 days from now
       
-//       let enrolledData = [];
-//       if (enrolledRes.data && enrolledRes.data.success) {
-//         enrolledData = enrolledRes.data.data || [];
-//       } else {
-//         enrolledData = enrolledRes.data || [];
-//       }
+      deadlines.push({
+        id: index + 1,
+        title: `Assignment ${index + 1}`,
+        description: `Complete the assignment for ${enrollment.course?.title || 'Course'}`,
+        dueDate: dueDate.toISOString(),
+        courseId: enrollment.course?.id,
+        courseTitle: enrollment.course?.title || 'Course',
+        assignmentId: `ASSIGN${index + 1}`,
+        isCompleted: false,
+        priority: index === 0 ? 'HIGH' : index === 1 ? 'MEDIUM' : 'LOW',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+    });
+    
+    return deadlines;
+  };
+
+  // Generate mock achievements (create /api/achievements endpoint based on your Achievement model)
+  const generateMockAchievements = (statsData) => {
+    const achievements = [
+      {
+        id: 1,
+        name: 'First Course Completed',
+        description: 'Successfully completed your first course',
+        icon: '🎓',
+        type: 'COMPLETION',
+        criteria: 'Complete 1 course',
+        earnedDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+        certificateUrl: null
+      },
+      {
+        id: 2,
+        name: 'Learning Streak',
+        description: 'Learned for 3 consecutive days',
+        icon: '🔥',
+        type: 'STREAK',
+        criteria: 'Learn for 3 days in a row',
+        earnedDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+        certificateUrl: null
+      },
+      {
+        id: 3,
+        name: 'Course Explorer',
+        description: 'Enrolled in 3 courses',
+        icon: '📚',
+        type: 'ENROLLMENT',
+        criteria: 'Enroll in 3 courses',
+        earnedDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+        certificateUrl: null
+      }
+    ];
+    
+    if (statsData.completedCourses >= 1) {
+      achievements.push({
+        id: 4,
+        name: 'Quick Learner',
+        description: 'Completed a course in less than a week',
+        icon: '⚡',
+        type: 'PERFORMANCE',
+        criteria: 'Complete course quickly',
+        earnedDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+        certificateUrl: null
+      });
+    }
+    
+    return achievements;
+  };
+
+  // Generate recent activity from enrollments
+  const generateRecentActivity = (enrollmentsData) => {
+    const activities = [];
+    
+    enrollmentsData.slice(0, 5).forEach((enrollment) => {
+      const course = enrollment.course;
+      const progress = enrollment.progress || 0;
       
-//       console.log('Enrolled courses:', enrolledData);
-//       setEnrolledCourses(enrolledData);
+      if (progress > 0) {
+        activities.push({
+          id: `activity-${enrollment.id}`,
+          type: 'progress',
+          title: course?.title || 'Course',
+          description: `Progress updated to ${progress}%`,
+          time: enrollment.updatedAt || enrollment.createdAt,
+          icon: '📈'
+        });
+      }
       
-//       // Filter courses in progress for "Continue Learning"
-//       const inProgressCourses = enrolledData.filter(course => 
-//         (course.progress || 0) > 0 && (course.progress || 0) < 100
-//       ).slice(0, 3);
-//       setContinueLearning(inProgressCourses);
-      
-//       // Calculate statistics
-//       const completedCourses = enrolledData.filter(course => (course.progress || 0) === 100);
-//       const totalHours = enrolledData.reduce((sum, course) => sum + (course.duration || 0), 0);
-//       const averageRating = enrolledData.length > 0 
-//         ? enrolledData.reduce((sum, course) => sum + (course.rating || 0), 0) / enrolledData.length 
-//         : 0;
-      
-//       setStats({
-//         enrolledCourses: enrolledData.length,
-//         completedCourses: completedCourses.length,
-//         totalLearningHours: Math.round(totalHours / 60),
-//         averageRating: averageRating.toFixed(1),
-//         streakDays: enrolledData.reduce((max, course) => Math.max(max, course.streak || 0), 0) || 7,
-//         achievementCount: completedCourses.length
-//       });
-      
-//       // 2. Fetch recommended courses - CORRECTED ENDPOINT
-//       try {
-//         const recommendedRes = await API.get('/courses/recommended');
-//         console.log('Recommended courses response:', recommendedRes);
+      activities.push({
+        id: `enroll-${enrollment.id}`,
+        type: 'enrollment',
+        title: course?.title || 'Course',
+        description: 'Enrolled in course',
+        time: enrollment.createdAt,
+        icon: '🎯'
+      });
+    });
+    
+    // Sort by time (newest first)
+    activities.sort((a, b) => new Date(b.time) - new Date(a.time));
+    
+    return activities.slice(0, 5);
+  };
+
+  // Handle course enrollment
+  const handleEnroll = async (courseId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+
+      const response = await API.post('/enrollments/free', 
+        { courseId }, 
+        { headers }
+      );
+
+      if (response.data?.success) {
+        setSuccess('Successfully enrolled in the course!');
+        // Refresh enrollments
+        const enrollmentsResponse = await API.get('/enrollments/me', { headers });
+        if (enrollmentsResponse.data?.success) {
+          setEnrollments(enrollmentsResponse.data.data || []);
+        }
         
-//         let recommendedData = [];
-//         if (recommendedRes.data && recommendedRes.data.success) {
-//           recommendedData = recommendedRes.data.data || [];
-//         } else {
-//           recommendedData = recommendedRes.data || [];
-//         }
-        
-//         setRecommendedCourses(recommendedData);
-//       } catch (recError) {
-//         console.warn('Could not fetch recommended courses:', recError);
-//         // Generate mock recommendations if API fails
-//         setRecommendedCourses([
-//           { id: 1, title: 'Advanced JavaScript', instructor: 'John Doe', price: 49, rating: 4.7, category: 'Programming' },
-//           { id: 2, title: 'UI/UX Design Fundamentals', instructor: 'Jane Smith', price: 39, rating: 4.5, category: 'Design' },
-//           { id: 3, title: 'Data Science Bootcamp', instructor: 'Mike Johnson', price: 99, rating: 4.8, category: 'Data Science' }
-//         ]);
-//       }
+        // Navigate to learning page after 1.5 seconds
+        setTimeout(() => {
+          navigate(`/courses/${courseId}/learn`);
+        }, 1500);
+      }
+    } catch (err) {
+      console.error('Enrollment error:', err);
+      if (err.response?.status === 409) {
+        setError('You are already enrolled in this course');
+      } else {
+        setError(err.response?.data?.message || 'Failed to enroll. Please try again.');
+      }
+    }
+  };
+
+  // Filter courses for display
+  const filteredCourses = () => {
+    let filtered = enrollments.map(e => ({
+      ...e.course,
+      enrollmentId: e.id,
+      progress: e.progress || e.stats?.progressPercentage || 0,
+      status: e.status || 'IN_PROGRESS',
+      lastAccessed: e.updatedAt || e.lastAccessed,
+      completedLessons: e.completedLessons || 0,
+      totalLessons: e.totalLessons || 0,
+      duration: e.duration || 0
+    }));
+    
+    if (showCompleted) {
+      filtered = filtered.filter(course => 
+        course.progress === 100 || 
+        (enrollments.find(e => e.courseId === course.id)?.status === 'COMPLETED')
+      );
+    } else {
+      filtered = filtered.filter(course => 
+        course.progress < 100 && 
+        (enrollments.find(e => e.courseId === course.id)?.status !== 'COMPLETED')
+      );
+    }
+    
+    if (searchCourse) {
+      const query = searchCourse.toLowerCase();
+      filtered = filtered.filter(course =>
+        course.title.toLowerCase().includes(query) ||
+        (course.description || '').toLowerCase().includes(query) ||
+        (course.category?.name || '').toLowerCase().includes(query)
+      );
+    }
+    
+    return filtered;
+  };
+
+  // Format date
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  // Format time ago
+  const formatTimeAgo = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 60) {
+      return `${diffMins}m ago`;
+    } else if (diffHours < 24) {
+      return `${diffHours}h ago`;
+    } else if (diffDays < 7) {
+      return `${diffDays}d ago`;
+    } else {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+  };
+
+  // Calculate days until deadline
+  const daysUntilDeadline = (dueDate) => {
+    const today = new Date();
+    const due = new Date(dueDate);
+    const diffTime = due - today;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  // Loading skeleton
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
+            <p className="text-gray-600">Loading your dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const courses = filteredCourses();
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navbar />
       
-//       // 3. Fetch user statistics - CORRECTED ENDPOINT
-//       try {
-//         const statsRes = await API.get('/users/me/stats');
-//         console.log('User stats response:', statsRes);
-        
-//         if (statsRes.data && statsRes.data.success) {
-//           setStats(prev => ({
-//             ...prev,
-//             ...statsRes.data.data
-//           }));
-//         }
-//       } catch (statsError) {
-//         console.warn('Could not fetch user stats:', statsError);
-//       }
-      
-//       // 4. Fetch achievements - Check if this endpoint exists
-//       try {
-//         const achievementsRes = await API.get('/users/me/achievements');
-//         console.log('Achievements response:', achievementsRes);
-        
-//         let achievementsData = [];
-//         if (achievementsRes.data && achievementsRes.data.success) {
-//           achievementsData = achievementsRes.data.data || [];
-//         } else {
-//           achievementsData = achievementsRes.data || [];
-//         }
-        
-//         setAchievements(achievementsData);
-//       } catch (achError) {
-//         console.warn('Could not fetch achievements:', achError);
-//         // Default achievements
-//         const defaultAchievements = [
-//           { id: 1, title: 'First Course Completed', icon: '🎓', unlocked: completedCourses.length >= 1, date: null },
-//           { id: 2, title: '3-Day Streak', icon: '🔥', unlocked: true, date: new Date().toISOString() },
-//           { id: 3, title: 'Perfect Progress', icon: '⭐', unlocked: false, date: null },
-//           { id: 4, title: 'Course Explorer', icon: '🧭', unlocked: enrolledData.length >= 3, date: null }
-//         ];
-//         setAchievements(defaultAchievements);
-//       }
-      
-//     } catch (error) {
-//       console.error('Error fetching dashboard data:', error);
-//       handleFetchError(error);
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex flex-col md:flex-row md:items-center justify-between">
+            <div className="text-white">
+              <h1 className="text-3xl font-bold mb-2">Student Dashboard</h1>
+              <p className="text-blue-100">
+                Welcome back! Track your learning progress and achievements.
+              </p>
+              <div className="mt-4 flex items-center space-x-4">
+                <div className="flex items-center bg-white/20 px-3 py-1 rounded-full">
+                  <Flame className="w-4 h-4 text-orange-300 mr-1" />
+                  <span className="text-sm font-medium">
+                    {stats.streakDays || 0} day streak
+                  </span>
+                </div>
+                <div className="text-sm text-blue-100">
+                  Last updated: {formatDate(new Date())}
+                </div>
+              </div>
+            </div>
+            <div className="mt-6 md:mt-0">
+              <button
+                onClick={fetchDashboardData}
+                className="px-6 py-3 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors flex items-center"
+              >
+                <Loader2 className="w-4 h-4 mr-2" />
+                Refresh Dashboard
+              </button>
+            </div>
+          </div>
 
-//   // Handle API errors
-//   const handleFetchError = (error) => {
-//     if (error.response) {
-//       if (error.response.status === 401) {
-//         setError('Session expired. Please login again.');
-//         localStorage.removeItem('user');
-//         localStorage.removeItem('token');
-//         navigate('/login');
-//       } else if (error.response.status === 403) {
-//         setError('You do not have permission to access student dashboard.');
-//       } else if (error.response.status === 404) {
-//         // If enrollments endpoint returns 404, user has no enrollments yet
-//         if (error.config.url.includes('/enrollments/me')) {
-//           setEnrolledCourses([]);
-//           setContinueLearning([]);
-//           setError('');
-//         } else {
-//           setError(`Resource not found: ${error.response.data?.message || 'Please try again later.'}`);
-//         }
-//       } else {
-//         setError(`Server error: ${error.response.status} - ${error.response.data?.message || 'Unknown error'}`);
-//       }
-//     } else if (error.request) {
-//       setError('Cannot connect to server. Please check your network connection.');
-//     } else {
-//       setError(`Request error: ${error.message}`);
-//     }
-//   };
+          {/* Stats Overview */}
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Stats Card 1 - Enrolled Courses */}
+            <div className="bg-white rounded-xl shadow p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 rounded-lg bg-blue-100 text-blue-600">
+                  <BookOpen className="h-6 w-6" />
+                </div>
+                <div className="text-sm text-green-600">
+                  +{stats.inProgressCourses || 0} in progress
+                </div>
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">{stats.enrolledCourses || 0}</h3>
+                <p className="text-gray-600">Enrolled Courses</p>
+              </div>
+            </div>
 
-//   useEffect(() => {
-//     fetchDashboardData();
-//   }, []);
+            {/* Stats Card 2 - Completion Rate */}
+            <div className="bg-white rounded-xl shadow p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 rounded-lg bg-green-100 text-green-600">
+                  <Target className="h-6 w-6" />
+                </div>
+                <div className="text-sm text-green-600">
+                  {stats.completedCourses || 0} completed
+                </div>
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">{stats.completionRate || stats.averageProgress || 0}%</h3>
+                <p className="text-gray-600">Completion Rate</p>
+              </div>
+            </div>
 
-//   // Handle course enrollment - CORRECTED ENDPOINT
-//   const handleEnrollCourse = async (courseId) => {
-//     try {
-//       setError('');
-//       setSuccess('');
-      
-//       const response = await API.post('/enrollments/free', {
-//         courseId: courseId
-//       });
-      
-//       if (response.data.success) {
-//         setSuccess('Successfully enrolled in the course!');
-        
-//         // Refresh dashboard data
-//         setTimeout(() => {
-//           fetchDashboardData();
-//         }, 1500);
-        
-//         // Clear success message after 3 seconds
-//         setTimeout(() => setSuccess(''), 3000);
-//       } else {
-//         setError(response.data.message || 'Failed to enroll in course.');
-//       }
-      
-//     } catch (error) {
-//       console.error('Error enrolling in course:', error);
-      
-//       if (error.response) {
-//         if (error.response.status === 409) {
-//           setError('You are already enrolled in this course.');
-//         } else if (error.response.status === 400) {
-//           setError(error.response.data.message || 'Invalid request. Please check course details.');
-//         } else {
-//           setError(error.response.data?.message || 'Failed to enroll in course. Please try again.');
-//         }
-//       } else if (error.request) {
-//         setError('Cannot connect to server. Please check your network connection.');
-//       } else {
-//         setError(`Request error: ${error.message}`);
-//       }
-//     }
-//   };
+            {/* Stats Card 3 - Learning Hours */}
+            <div className="bg-white rounded-xl shadow p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 rounded-lg bg-purple-100 text-purple-600">
+                  <Clock className="h-6 w-6" />
+                </div>
+                <div className="text-sm text-green-600">
+                  +2h this week
+                </div>
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">{stats.totalLearningHours || 0}</h3>
+                <p className="text-gray-600">Learning Hours</p>
+              </div>
+            </div>
 
-//   // Handle logout
-//   const handleLogout = () => {
-//     localStorage.removeItem('user');
-//     localStorage.removeItem('token');
-//     navigate('/login');
-//   };
+            {/* Stats Card 4 - Achievements */}
+            <div className="bg-white rounded-xl shadow p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 rounded-lg bg-orange-100 text-orange-600">
+                  <Award className="h-6 w-6" />
+                </div>
+                <div className="text-sm text-green-600">
+                  Keep learning!
+                </div>
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">{stats.achievementCount || achievements.length}</h3>
+                <p className="text-gray-600">Achievements</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-//   // Format date
-//   const formatDate = (dateString) => {
-//     if (!dateString) return 'N/A';
-//     try {
-//       const date = new Date(dateString);
-//       return date.toLocaleDateString('en-US', {
-//         month: 'short',
-//         day: 'numeric'
-//       });
-//     } catch (error) {
-//       return 'Invalid date';
-//     }
-//   };
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg border border-red-200 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-semibold">Error:</div>
+              <div>{error}</div>
+            </div>
+            <button 
+              onClick={() => setError('')}
+              className="text-red-600 hover:text-red-800"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
-//   // Format time
-//   const formatTime = (minutes) => {
-//     if (!minutes) return '0h';
-//     const hours = Math.floor(minutes / 60);
-//     const mins = minutes % 60;
-//     return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
-//   };
+        {/* Success Message */}
+        {success && (
+          <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-lg border border-green-200 flex items-start gap-3">
+            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-semibold">Success!</div>
+              <div>{success}</div>
+            </div>
+            <button 
+              onClick={() => setSuccess('')}
+              className="text-green-600 hover:text-green-800"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
-//   if (loading) {
-//     return (
-//       <div className="min-h-screen bg-linear-to-br from-gray-50 to-blue-50 flex items-center justify-center">
-//         <div className="text-center">
-//           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-//           <p className="text-gray-600">Loading your learning dashboard...</p>
-//         </div>
-//       </div>
-//     );
-//   }
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column - Course Progress */}
+          <div className="lg:col-span-2 space-y-8">
+            {/* Progress Overview */}
+            <div className="bg-white rounded-xl shadow p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                  <BarChart3 className="h-6 w-6 mr-2 text-blue-600" />
+                  Learning Progress
+                </h2>
+                <div className="flex space-x-2">
+                  {['overview', 'in-progress', 'completed'].map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                        activeTab === tab
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-600 hover:bg-gray-100 border border-gray-200'
+                      }`}
+                    >
+                      {tab.charAt(0).toUpperCase() + tab.slice(1).replace('-', ' ')}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-//   return (
-//     <div className="min-h-screen bg-linear-to-br from-gray-50 to-blue-50">
-//       {/* Header/Navbar */}
-//       <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
-//         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-//           <div className="flex items-center justify-between h-16">
-//             {/* Logo/Left side */}
-//             <div className="flex items-center">
-//               <button
-//                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-//                 className="lg:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 mr-2"
-//               >
-//                 {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-//               </button>
-//               <div className="flex items-center">
-//                 <BookOpen className="h-8 w-8 text-blue-600" />
-//                 <div className="ml-3">
-//                   <h1 className="text-xl font-bold text-gray-900">Student Dashboard</h1>
-//                   <p className="text-xs text-gray-600">Welcome, {currentUser?.name || 'Student'}!</p>
-//                 </div>
-//               </div>
-//             </div>
+              {/* Progress Visualization */}
+              <div className="mb-8">
+                <div className="h-48 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl flex flex-col items-center justify-center p-6">
+                  <div className="text-center">
+                    <BarChart3 className="h-12 w-12 text-blue-400 mx-auto mb-4" />
+                    <div className="text-3xl font-bold text-gray-900 mb-2">
+                      {stats.averageProgress || 0}%
+                    </div>
+                    <p className="text-gray-600">Average Course Progress</p>
+                    <div className="mt-4 flex items-center justify-center space-x-4 text-sm">
+                      <div className="flex items-center">
+                        <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                        <span className="text-gray-600">{stats.completedCourses || 0} Completed</span>
+                      </div>
+                      <div className="flex items-center">
+                        <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+                        <span className="text-gray-600">{stats.inProgressCourses || 0} In Progress</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-//             {/* Desktop Navigation */}
-//             <div className="hidden lg:flex items-center space-x-4">
-//               <button
-//                 onClick={fetchDashboardData}
-//                 className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-//               >
-//                 <RefreshCw className="w-4 h-4" />
-//                 Refresh
-//               </button>
-              
-//               <Link
-//                 to="/courses"
-//                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-//               >
-//                 <BookOpen className="w-4 h-4" />
-//                 Browse Courses
-//               </Link>
-              
-//               {/* Profile Dropdown */}
-//               <div className="relative group">
-//                 <button className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-colors">
-//                   <div className="w-8 h-8 bg-linear-to-r from-green-500 to-teal-500 rounded-full flex items-center justify-center text-white font-semibold">
-//                     {currentUser?.name?.charAt(0) || 'S'}
-//                   </div>
-//                   <div className="text-left hidden md:block">
-//                     <p className="text-sm font-medium text-gray-900">{currentUser?.name || 'Student'}</p>
-//                     <p className="text-xs text-gray-500">{stats.enrolledCourses} courses enrolled</p>
-//                   </div>
-//                   <ChevronRight className="w-4 h-4 text-gray-400 group-hover:rotate-90 transition-transform" />
-//                 </button>
+              {/* Course List */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {activeTab === 'overview' && 'My Courses'}
+                    {activeTab === 'in-progress' && 'Courses in Progress'}
+                    {activeTab === 'completed' && 'Completed Courses'}
+                  </h3>
+                  <div className="flex items-center space-x-4">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Search courses..."
+                        value={searchCourse}
+                        onChange={(e) => setSearchCourse(e.target.value)}
+                        className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      />
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    </div>
+                    <button
+                      onClick={() => setShowCompleted(!showCompleted)}
+                      className={`px-3 py-2 text-sm rounded-lg border ${
+                        showCompleted
+                          ? 'bg-purple-600 text-white border-purple-600'
+                          : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {showCompleted ? 'Show All' : 'Show Completed'}
+                    </button>
+                  </div>
+                </div>
                 
-//                 {/* Dropdown Menu */}
-//                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-//                   <Link
-//                     to="/student/profile"
-//                     className="flex items-center gap-2 px-4 py-3 text-gray-700 hover:bg-gray-50 transition-colors"
-//                   >
-//                     <UserCircle className="w-4 h-4" />
-//                     My Profile
-//                   </Link>
-//                   <div className="border-t border-gray-200 my-1"></div>
-//                   <button
-//                     onClick={handleLogout}
-//                     className="flex items-center gap-2 w-full text-left px-4 py-3 text-red-600 hover:bg-red-50 transition-colors"
-//                   >
-//                     <LogOut className="w-4 h-4" />
-//                     Logout
-//                   </button>
-//                 </div>
-//               </div>
-//             </div>
+                {courses.length === 0 ? (
+                  <div className="text-center py-12">
+                    <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                    <h4 className="text-lg font-semibold text-gray-900 mb-2">
+                      {searchCourse ? 'No courses found' : 'No courses yet'}
+                    </h4>
+                    <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                      {searchCourse 
+                        ? 'Try different search terms or clear the search filter.'
+                        : showCompleted
+                        ? "You haven't completed any courses yet. Keep learning!"
+                        : "You're not enrolled in any courses yet. Start learning!"}
+                    </p>
+                    <button
+                      onClick={() => navigate('/courses')}
+                      className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    >
+                      Browse Courses
+                    </button>
+                  </div>
+                ) : (
+                  courses.slice(0, 5).map((course, index) => {
+                    const enrollment = enrollments.find(e => e.courseId === course.id) || {};
+                    const progress = enrollment.progress || enrollment.stats?.progressPercentage || 0;
+                    const isCompleted = progress === 100 || enrollment.status === 'COMPLETED';
 
-//             {/* Mobile menu button */}
-//             <div className="lg:hidden flex items-center gap-2">
-//               <Link
-//                 to="/courses"
-//                 className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
-//               >
-//                 <BookOpen className="w-4 h-4" />
-//                 <span>Browse</span>
-//               </Link>
-//             </div>
-//           </div>
-
-//           {/* Mobile Navigation Menu */}
-//           {mobileMenuOpen && (
-//             <div className="lg:hidden border-t border-gray-200 py-4">
-//               <div className="space-y-2">
-//                 <button
-//                   onClick={fetchDashboardData}
-//                   className="flex items-center gap-3 w-full px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-//                 >
-//                   <RefreshCw className="w-5 h-5" />
-//                   Refresh Dashboard
-//                 </button>
-//                 <Link
-//                   to="/courses"
-//                   className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-//                   onClick={() => setMobileMenuOpen(false)}
-//                 >
-//                   <BookOpen className="w-5 h-5" />
-//                   Browse All Courses
-//                 </Link>
-//                 <Link
-//                   to="/student/profile"
-//                   className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-//                   onClick={() => setMobileMenuOpen(false)}
-//                 >
-//                   <UserCircle className="w-5 h-5" />
-//                   My Profile
-//                 </Link>
-//                 <button
-//                   onClick={handleLogout}
-//                   className="flex items-center gap-3 w-full px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-//                 >
-//                   <LogOut className="w-5 h-5" />
-//                   Logout
-//                 </button>
-//               </div>
-              
-//               {/* User Info in Mobile Menu */}
-//               <div className="mt-4 pt-4 border-t border-gray-200 px-4">
-//                 <div className="flex items-center gap-3">
-//                   <div className="w-10 h-10 bg-linear-to-r from-green-500 to-teal-500 rounded-full flex items-center justify-center text-white font-semibold">
-//                     {currentUser?.name?.charAt(0) || 'S'}
-//                   </div>
-//                   <div>
-//                     <p className="font-medium text-gray-900">{currentUser?.name || 'Student'}</p>
-//                     <p className="text-sm text-gray-500">{stats.enrolledCourses} courses enrolled</p>
-//                     <p className="text-xs text-green-600 mt-1">
-//                       {stats.completedCourses} completed • {stats.enrolledCourses - stats.completedCourses} in progress
-//                     </p>
-//                   </div>
-//                 </div>
-//               </div>
-//             </div>
-//           )}
-//         </div>
-//       </header>
-
-//       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-//         {/* Success Messages */}
-//         {success && (
-//           <div className="mb-6 bg-green-50 border-green-200 rounded-xl p-4 flex items-start gap-3">
-//             <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-//             <div>
-//               <p className="text-green-700 font-medium">{success}</p>
-//             </div>
-//           </div>
-//         )}
-
-//         {/* Error Messages */}
-//         {error && (
-//           <div className="mb-6 bg-red-50 border-red-200 rounded-xl p-4 flex items-start gap-3">
-//             <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-//             <div>
-//               <p className="text-red-700 font-medium">{error}</p>
-//             </div>
-//           </div>
-//         )}
-
-//         {/* Quick Stats */}
-//         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-//           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-//             <div className="flex items-center justify-between">
-//               <div>
-//                 <p className="text-gray-600 text-sm">Enrolled Courses</p>
-//                 <p className="text-2xl font-bold text-gray-900 mt-1">{stats.enrolledCourses}</p>
-//               </div>
-//               <div className="bg-blue-100 p-2 rounded-lg">
-//                 <BookOpen className="w-5 h-5 text-blue-600" />
-//               </div>
-//             </div>
-//           </div>
-
-//           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-//             <div className="flex items-center justify-between">
-//               <div>
-//                 <p className="text-gray-600 text-sm">Completed</p>
-//                 <p className="text-2xl font-bold text-gray-900 mt-1">{stats.completedCourses}</p>
-//               </div>
-//               <div className="bg-green-100 p-2 rounded-lg">
-//                 <CheckCircle className="w-5 h-5 text-green-600" />
-//               </div>
-//             </div>
-//           </div>
-
-//           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-//             <div className="flex items-center justify-between">
-//               <div>
-//                 <p className="text-gray-600 text-sm">Learning Hours</p>
-//                 <p className="text-2xl font-bold text-gray-900 mt-1">{stats.totalLearningHours}h</p>
-//               </div>
-//               <div className="bg-purple-100 p-2 rounded-lg">
-//                 <Clock className="w-5 h-5 text-purple-600" />
-//               </div>
-//             </div>
-//           </div>
-
-//           <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
-//             <div className="flex items-center justify-between">
-//               <div>
-//                 <p className="text-gray-600 text-sm">Achievements</p>
-//                 <p className="text-2xl font-bold text-gray-900 mt-1">{stats.achievementCount}</p>
-//               </div>
-//               <div className="bg-yellow-100 p-2 rounded-lg">
-//                 <Award className="w-5 h-5 text-yellow-600" />
-//               </div>
-//             </div>
-//           </div>
-//         </div>
-
-//         {/* Main Content Grid */}
-//         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-//           {/* Left Column - Main Content */}
-//           <div className="lg:col-span-2 space-y-8">
-//             {/* Continue Learning Section */}
-//             {continueLearning.length > 0 && (
-//               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-//                 <div className="flex items-center justify-between mb-6">
-//                   <div>
-//                     <h2 className="text-xl font-bold text-gray-900">Continue Learning</h2>
-//                     <p className="text-gray-600 text-sm mt-1">Pick up where you left off</p>
-//                   </div>
-//                   <Link 
-//                     to="/courses?filter=in-progress" 
-//                     className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1"
-//                   >
-//                     View All <ChevronRight className="w-4 h-4" />
-//                   </Link>
-//                 </div>
-                
-//                 <div className="space-y-4">
-//                   {continueLearning.map((course) => (
-//                     <div key={course.id || course._id} className="bg-gray-50 rounded-xl border border-gray-200 p-4 hover:border-blue-300 transition-colors">
-//                       <div className="flex items-start gap-4">
-//                         <div className="w-16 h-16 bg-blue-100 rounded-lg flex items-center justify-center">
-//                           <BookOpen className="w-8 h-8 text-blue-600" />
-//                         </div>
-//                         <div className="flex-1">
-//                           <div className="flex justify-between items-start mb-2">
-//                             <div>
-//                               <h3 className="font-semibold text-gray-900">{course.title || 'Untitled Course'}</h3>
-//                               <p className="text-sm text-gray-600">{course.instructor || 'Unknown Instructor'}</p>
-//                             </div>
-//                             <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded">
-//                               {course.progress || 0}% Complete
-//                             </span>
-//                           </div>
+                    return (
+                      <div
+                        key={`course-${course.id}-${index}`}
+                        className="group bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition-all duration-300 border border-gray-200 hover:border-blue-300 cursor-pointer"
+                        onClick={() => {
+                          if (course.id && enrollment.id) {
+                            navigate(`/courses/${course.id}/learn?enrollment=${enrollment.id}`);
+                          } else if (course.id) {
+                            navigate(`/courses/${course.id}`);
+                          }
+                        }}
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className="relative">
+                            <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                              <BookOpen className="h-8 w-8 text-blue-600" />
+                            </div>
+                            {isCompleted && (
+                              <div className="absolute -top-2 -right-2 bg-green-500 text-white rounded-full p-1">
+                                <CheckCircle className="h-4 w-4" />
+                              </div>
+                            )}
+                          </div>
                           
-//                           {/* Progress Bar */}
-//                           <div className="mb-3">
-//                             <div className="w-full bg-gray-200 rounded-full h-2">
-//                               <div 
-//                                 className="bg-blue-600 h-2 rounded-full"
-//                                 style={{ width: `${course.progress || 0}%` }}
-//                               ></div>
-//                             </div>
-//                           </div>
-                          
-//                           <div className="flex items-center justify-between">
-//                             <div className="flex items-center gap-4 text-sm text-gray-500">
-//                               <div className="flex items-center gap-1">
-//                                 <Clock className="w-4 h-4" />
-//                                 <span>{formatTime(course.duration || 0)} remaining</span>
-//                               </div>
-//                               <div className="flex items-center gap-1">
-//                                 <Star className="w-4 h-4 text-yellow-500" />
-//                                 <span>{course.rating || 'N/A'}</span>
-//                               </div>
-//                             </div>
-//                             <Link
-//                               to={`/courses/${course.id || course._id}/learn?enrollment=${course.enrollmentId}`}
-//                               className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-//                             >
-//                               <PlayCircle className="w-4 h-4" />
-//                               Continue
-//                             </Link>
-//                           </div>
-//                         </div>
-//                       </div>
-//                     </div>
-//                   ))}
-//                 </div>
-//               </div>
-//             )}
-
-//             {/* Enrolled Courses Grid */}
-//             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-//               <div className="flex items-center justify-between mb-6">
-//                 <div>
-//                   <h2 className="text-xl font-bold text-gray-900">My Courses ({enrolledCourses.length})</h2>
-//                   <p className="text-gray-600 text-sm mt-1">All your enrolled courses</p>
-//                 </div>
-//                 <div className="flex items-center gap-2">
-//                   <div className="relative">
-//                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-//                     <input
-//                       type="text"
-//                       placeholder="Search courses..."
-//                       className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-//                     />
-//                   </div>
-//                 </div>
-//               </div>
-
-//               {/* Course Grid */}
-//               {enrolledCourses.length === 0 ? (
-//                 <div className="py-12 text-center">
-//                   <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-//                   <h3 className="text-lg font-semibold text-gray-900 mb-2">No courses enrolled yet</h3>
-//                   <p className="text-gray-600 mb-6 max-w-md mx-auto">
-//                     Start your learning journey by enrolling in courses from our catalog!
-//                   </p>
-//                   <Link
-//                     to="/courses"
-//                     className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg font-medium"
-//                   >
-//                     <BookOpen className="w-5 h-5" />
-//                     Browse Courses
-//                   </Link>
-//                 </div>
-//               ) : (
-//                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-//                   {enrolledCourses.map((course) => (
-//                     <div key={course.id || course._id} className="border border-gray-200 rounded-xl p-4 hover:border-blue-300 transition-colors">
-//                       <div className="flex items-start justify-between mb-3">
-//                         <div className="flex items-center gap-3">
-//                           <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-//                             <BookOpen className="w-6 h-6 text-blue-600" />
-//                           </div>
-//                           <div>
-//                             <h3 className="font-semibold text-gray-900 line-clamp-1">{course.title || 'Untitled Course'}</h3>
-//                             <p className="text-sm text-gray-600">{course.instructor || 'Unknown Instructor'}</p>
-//                           </div>
-//                         </div>
-//                         <span className={`px-2 py-1 rounded text-xs font-medium ${
-//                           course.progress === 100 
-//                             ? 'bg-green-100 text-green-800' 
-//                             : course.progress > 0 
-//                               ? 'bg-blue-100 text-blue-800' 
-//                               : 'bg-gray-100 text-gray-800'
-//                         }`}>
-//                           {course.progress === 100 ? 'Completed' : `${course.progress || 0}%`}
-//                         </span>
-//                       </div>
-                      
-//                       {/* Progress Bar */}
-//                       <div className="mb-4">
-//                         <div className="w-full bg-gray-200 rounded-full h-2">
-//                           <div 
-//                             className={`h-2 rounded-full ${
-//                               course.progress === 100 ? 'bg-green-500' :
-//                               course.progress >= 50 ? 'bg-blue-500' :
-//                               'bg-yellow-500'
-//                             }`}
-//                             style={{ width: `${course.progress || 0}%` }}
-//                           ></div>
-//                         </div>
-//                       </div>
-                      
-//                       <div className="flex items-center justify-between">
-//                         <div className="text-sm text-gray-600">
-//                           <div className="flex items-center gap-2">
-//                             <div className="flex items-center gap-1">
-//                               <Clock className="w-4 h-4" />
-//                               <span>{formatTime(course.duration || 0)}</span>
-//                             </div>
-//                             <div className="flex items-center gap-1">
-//                               <Star className="w-4 h-4 text-yellow-500" />
-//                               <span>{course.rating || 'N/A'}</span>
-//                             </div>
-//                           </div>
-//                         </div>
-//                         <Link
-//                           to={`/courses/${course.id || course._id}/learn?enrollment=${course.enrollmentId}`}
-//                           className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1"
-//                         >
-//                           {course.progress === 100 ? 'Review' : 'Continue'} <ChevronRight className="w-4 h-4" />
-//                         </Link>
-//                       </div>
-//                     </div>
-//                   ))}
-//                 </div>
-//               )}
-//             </div>
-//           </div>
-
-//           {/* Right Column - Sidebar */}
-//           <div className="space-y-6">
-//             {/* Course Recommendations */}
-//             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-//               <div className="flex items-center justify-between mb-4">
-//                 <h3 className="text-lg font-semibold text-gray-900">Recommended Courses</h3>
-//                 <Link 
-//                   to="/courses" 
-//                   className="text-blue-600 hover:text-blue-800 text-sm"
-//                 >
-//                   View All
-//                 </Link>
-//               </div>
-              
-//               <div className="space-y-4">
-//                 {recommendedCourses.slice(0, 3).map((course) => (
-//                   <div key={course.id || course._id} className="border border-gray-200 rounded-lg p-3 hover:border-blue-300 transition-colors">
-//                     <div className="flex items-start gap-3">
-//                       <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-//                         <BookOpen className="w-5 h-5 text-green-600" />
-//                       </div>
-//                       <div className="flex-1">
-//                         <h4 className="font-medium text-gray-900 text-sm">{course.title}</h4>
-//                         <p className="text-xs text-gray-600">{course.instructor}</p>
-//                         <div className="flex items-center justify-between mt-2">
-//                           <div className="flex items-center gap-2">
-//                             <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-blue-800 rounded">
-//                               {course.category || 'General'}
-//                             </span>
-//                             <span className="text-xs text-gray-600 flex items-center gap-1">
-//                               <Star className="w-3 h-3 text-yellow-500" />
-//                               {course.rating}
-//                             </span>
-//                           </div>
-//                           <span className="text-xs font-medium text-gray-900">
-//                             {course.price === 0 ? 'Free' : `$${course.price}`}
-//                           </span>
-//                         </div>
-//                       </div>
-//                     </div>
-//                     <button
-//                       onClick={() => handleEnrollCourse(course.id || course._id)}
-//                       className="w-full mt-3 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
-//                     >
-//                       Enroll Now
-//                     </button>
-//                   </div>
-//                 ))}
-//               </div>
-              
-//               <div className="mt-4 pt-4 border-t border-gray-200">
-//                 <Link
-//                   to="/courses"
-//                   className="flex items-center justify-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium"
-//                 >
-//                   <BookOpen className="w-4 h-4" />
-//                   Browse All Courses
-//                 </Link>
-//               </div>
-//             </div>
-
-//             {/* Achievement Badges */}
-//             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-//               <h3 className="text-lg font-semibold text-gray-900 mb-4">Achievement Badges</h3>
-              
-//               <div className="grid grid-cols-3 gap-3">
-//                 {achievements.slice(0, 6).map((achievement) => (
-//                   <div 
-//                     key={achievement.id} 
-//                     className={`p-3 rounded-xl border text-center ${achievement.unlocked ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200 opacity-50'}`}
-//                   >
-//                     <div className="text-2xl mb-1">{achievement.icon || '🏆'}</div>
-//                     <p className="text-xs font-medium text-gray-900">{achievement.title}</p>
-//                     {achievement.unlocked && achievement.date && (
-//                       <p className="text-xs text-gray-500 mt-1">{formatDate(achievement.date)}</p>
-//                     )}
-//                   </div>
-//                 ))}
-//               </div>
-              
-//               <div className="mt-4 pt-4 border-t border-gray-200">
-//                 <div className="flex items-center justify-between">
-//                   <span className="text-sm text-gray-600">
-//                     {achievements.filter(a => a.unlocked).length} of {achievements.length} unlocked
-//                   </span>
-//                   <Link
-//                     to="/student/achievements"
-//                     className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-//                   >
-//                     View All
-//                   </Link>
-//                 </div>
-//               </div>
-//             </div>
-
-//             {/* Learning Goals */}
-//             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-//               <h3 className="text-lg font-semibold text-gray-900 mb-4">Learning Goals</h3>
-              
-//               <div className="space-y-4">
-//                 <div>
-//                   <div className="flex items-center justify-between mb-1">
-//                     <span className="text-sm text-gray-700">Complete 5 courses</span>
-//                     <span className="text-sm font-medium text-gray-900">{stats.completedCourses}/5</span>
-//                   </div>
-//                   <div className="w-full bg-gray-200 rounded-full h-2">
-//                     <div 
-//                       className="h-2 rounded-full bg-green-500"
-//                       style={{ width: `${(stats.completedCourses / 5) * 100}%` }}
-//                     ></div>
-//                   </div>
-//                 </div>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                                {course.title}
+                              </h4>
+                              <div className="flex items-center space-x-2">
+                                {course.category && (
+                                  <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
+                                    {course.category.name || 'General'}
+                                  </span>
+                                )}
+                                <span className="text-xs text-gray-500">
+                                  {formatDate(enrollment.updatedAt)}
+                                </span>
+                              </div>
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                              {course.description || 'No description available'}
+                            </p>
+                            
+                            <div className="mt-3 flex items-center justify-between">
+                              <div className="flex items-center space-x-6 text-sm text-gray-500">
+                                <span className="flex items-center">
+                                  <BookOpen className="h-4 w-4 mr-1" />
+                                  {enrollment.totalLessons || course.totalLessons || 'N/A'} lessons
+                                </span>
+                                <span className="flex items-center">
+                                  <Clock className="h-4 w-4 mr-1" />
+                                  {enrollment.duration || course.duration || 'N/A'} min
+                                </span>
+                                <span className="flex items-center">
+                                  <Star className="h-4 w-4 mr-1 text-yellow-500 fill-yellow-500" />
+                                  {(course.rating || 0).toFixed(1)}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center space-x-3">
+                                <div className="w-32">
+                                  <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                                    <span>Progress</span>
+                                    <span className="font-semibold">{progress}%</span>
+                                  </div>
+                                  <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div 
+                                      className={`h-full rounded-full transition-all duration-500 ${
+                                        isCompleted ? 'bg-green-500' : 'bg-blue-500'
+                                      }`}
+                                      style={{ width: `${progress}%` }}
+                                    ></div>
+                                  </div>
+                                </div>
+                                
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (course.id && enrollment.id) {
+                                      navigate(`/courses/${course.id}/learn?enrollment=${enrollment.id}`);
+                                    } else if (course.id) {
+                                      navigate(`/courses/${course.id}`);
+                                    }
+                                  }}
+                                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center"
+                                >
+                                  <PlayCircle className="h-4 w-4 mr-2" />
+                                  {progress > 0 ? 'Continue' : 'Start'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
                 
-//                 <div>
-//                   <div className="flex items-center justify-between mb-1">
-//                     <span className="text-sm text-gray-700">30-day learning streak</span>
-//                     <span className="text-sm font-medium text-gray-900">{stats.streakDays}/30 days</span>
-//                   </div>
-//                   <div className="w-full bg-gray-200 rounded-full h-2">
-//                     <div 
-//                       className="h-2 rounded-full bg-blue-500"
-//                       style={{ width: `${(stats.streakDays / 30) * 100}%` }}
-//                     ></div>
-//                   </div>
-//                 </div>
-                
-//                 <div>
-//                   <div className="flex items-center justify-between mb-1">
-//                     <span className="text-sm text-gray-700">10 learning hours</span>
-//                     <span className="text-sm font-medium text-gray-900">{stats.totalLearningHours}/10h</span>
-//                   </div>
-//                   <div className="w-full bg-gray-200 rounded-full h-2">
-//                     <div 
-//                       className="h-2 rounded-full bg-purple-500"
-//                       style={{ width: `${(stats.totalLearningHours / 10) * 100}%` }}
-//                     ></div>
-//                   </div>
-//                 </div>
-//               </div>
-//             </div>
+                {courses.length > 5 && (
+                  <div className="text-center pt-4 border-t border-gray-200">
+                    <button
+                      onClick={() => navigate('/my-courses')}
+                      className="text-blue-600 hover:text-blue-800 font-medium flex items-center justify-center mx-auto"
+                    >
+                      View All Courses
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
 
-//             {/* Quick Actions */}
-//             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-//               <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-//               <div className="space-y-2">
-//                 <Link
-//                   to="/courses"
-//                   className="flex items-center gap-3 p-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-//                 >
-//                   <BookOpen className="w-5 h-5 text-blue-600" />
-//                   <div>
-//                     <p className="font-medium">Browse Course Catalog</p>
-//                     <p className="text-sm text-gray-500">Explore all available courses</p>
-//                   </div>
-//                 </Link>
-//                 <Link
-//                   to="/student/certificates"
-//                   className="flex items-center gap-3 p-3 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-//                 >
-//                   <Award className="w-5 h-5 text-yellow-600" />
-//                   <div>
-//                     <p className="font-medium">View Certificates</p>
-//                     <p className="text-sm text-gray-500">{stats.completedCourses} certificates earned</p>
-//                   </div>
-//                 </Link>
-//               </div>
-//             </div>
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// };
+            {/* Recommended Courses */}
+            {recommendedCourses.length > 0 && (
+              <div className="bg-white rounded-xl shadow p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                    <TrendingUp className="h-6 w-6 mr-2 text-green-600" />
+                    Recommended For You
+                  </h2>
+                  <button 
+                    onClick={() => navigate('/courses?filter=recommended')}
+                    className="text-blue-600 hover:text-blue-800 flex items-center text-sm font-medium"
+                  >
+                    View All
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </button>
+                </div>
 
-// export default StudentDashboard;
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {recommendedCourses.slice(0, 3).map((course) => {
+                    const isAlreadyEnrolled = enrollments.some(e => e.courseId === course.id);
+
+                    return (
+                      <div key={`recommended-${course.id}`} className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+                        <div className="h-32 bg-gradient-to-r from-blue-100 to-purple-100 relative">
+                          {course.thumbnail && (
+                            <img 
+                              src={course.thumbnail.startsWith('http') ? course.thumbnail : `/${course.thumbnail}`}
+                              alt={course.title}
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                          {course.price === 0 && (
+                            <span className="absolute top-2 right-2 px-2 py-1 bg-green-500 text-white text-xs font-semibold rounded">
+                              FREE
+                            </span>
+                          )}
+                        </div>
+                        <div className="p-4">
+                          <h3 className="font-bold text-gray-900 mb-2 line-clamp-2 text-sm">
+                            {course.title}
+                          </h3>
+                          <p className="text-gray-600 text-xs mb-4 line-clamp-2">
+                            {course.description}
+                          </p>
+                          <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
+                            <div className="flex items-center">
+                              <Users className="w-3 h-3 mr-1" />
+                              <span>{course.enrollmentCount || 0}</span>
+                            </div>
+                            <div className="flex items-center">
+                              <Star className="w-3 h-3 text-yellow-500 mr-1 fill-yellow-500" />
+                              <span>{(course.rating || 0).toFixed(1)}</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              if (isAlreadyEnrolled) {
+                                const enrollment = enrollments.find(e => e.courseId === course.id);
+                                navigate(`/courses/${course.id}/learn?enrollment=${enrollment?.id}`);
+                              } else if (course.price === 0) {
+                                handleEnroll(course.id);
+                              } else {
+                                navigate(`/courses/${course.id}`);
+                              }
+                            }}
+                            className={`w-full py-2 rounded-lg font-semibold text-white text-sm ${
+                              isAlreadyEnrolled 
+                                ? 'bg-gradient-to-r from-green-600 to-green-700'
+                                : course.price === 0
+                                ? 'bg-gradient-to-r from-blue-600 to-blue-700'
+                                : 'bg-gradient-to-r from-gray-800 to-gray-900'
+                            }`}
+                          >
+                            {isAlreadyEnrolled ? 'Continue Learning' : course.price === 0 ? 'Enroll Free' : 'Enroll Now'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right Column - Sidebar */}
+          <div className="space-y-8">
+            {/* Upcoming Deadlines */}
+            <div className="bg-white rounded-xl shadow p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                  <Calendar className="h-6 w-6 mr-2 text-red-600" />
+                  Upcoming Deadlines
+                </h2>
+                <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                  {deadlines.length} items
+                </span>
+              </div>
+
+              <div className="space-y-4">
+                {deadlines.length === 0 ? (
+                  <div className="text-center py-8">
+                    <CheckCircle className="h-12 w-12 text-green-400 mx-auto mb-3" />
+                    <p className="text-gray-600 font-medium">No upcoming deadlines</p>
+                    <p className="text-sm text-gray-500 mt-1">You're all caught up!</p>
+                  </div>
+                ) : (
+                  deadlines.map((deadline) => {
+                    const daysLeft = daysUntilDeadline(deadline.dueDate);
+                    const isOverdue = daysLeft < 0;
+                    const isToday = daysLeft === 0;
+
+                    return (
+                      <div key={`deadline-${deadline.id}`} className="p-4 rounded-lg border bg-white hover:bg-gray-50 transition-colors">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-start space-x-3">
+                            <div className={`p-2 rounded-lg ${
+                              deadline.isCompleted 
+                                ? 'bg-green-100' 
+                                : isOverdue 
+                                ? 'bg-red-100'
+                                : 'bg-blue-100'
+                            }`}>
+                              {deadline.isCompleted ? (
+                                <CheckCircle className="h-5 w-5 text-green-600" />
+                              ) : isOverdue ? (
+                                <AlertCircle className="h-5 w-5 text-red-600" />
+                              ) : (
+                                <Calendar className="h-5 w-5 text-blue-600" />
+                              )}
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-gray-900">{deadline.title}</h4>
+                              <p className="text-sm text-gray-600">{deadline.courseTitle}</p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="text-gray-600">
+                            Due: {formatDate(deadline.dueDate)}
+                          </div>
+                          <div className={`font-medium ${
+                            deadline.isCompleted 
+                              ? 'text-green-600'
+                              : isOverdue 
+                              ? 'text-red-600'
+                              : 'text-blue-600'
+                          }`}>
+                            {deadline.isCompleted 
+                              ? 'Completed' 
+                              : isOverdue 
+                              ? `${Math.abs(daysLeft)} days overdue`
+                              : isToday 
+                              ? 'Due today'
+                              : `${daysLeft} days left`
+                            }
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Achievements */}
+            <div className="bg-white rounded-xl shadow p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                  <Trophy className="h-6 w-6 mr-2 text-yellow-600" />
+                  Recent Achievements
+                </h2>
+                <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                  {achievements.length} earned
+                </span>
+              </div>
+
+              <div className="space-y-4">
+                {achievements.slice(0, 3).map((achievement) => (
+                  <div key={`achievement-${achievement.id}`} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-100 to-yellow-200 flex items-center justify-center">
+                      <Award className="h-6 w-6 text-yellow-500" />
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-gray-900 truncate">{achievement.name}</h4>
+                      <p className="text-sm text-gray-600 truncate">{achievement.description}</p>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Earned {formatDate(achievement.earnedDate)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Recent Activity */}
+            <div className="bg-white rounded-xl shadow p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                  <Zap className="h-6 w-6 mr-2 text-orange-600" />
+                  Recent Activity
+                </h2>
+                <CalendarDays className="h-5 w-5 text-gray-400" />
+              </div>
+
+              <div className="space-y-4">
+                {recentActivity.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Zap className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-600">No recent activity</p>
+                  </div>
+                ) : (
+                  recentActivity.map((activity) => (
+                    <div key={activity.id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="p-2 bg-white rounded-lg">
+                        <Zap className="h-5 w-5 text-blue-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-gray-900 truncate">{activity.title}</h4>
+                        <p className="text-sm text-gray-600 truncate">{activity.description}</p>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {formatTimeAgo(activity.time)}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default StudentDashboard;
